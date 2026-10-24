@@ -1,0 +1,1068 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  runApp(const RatelyFarmsApp());
+}
+
+class RatelyFarmsApp extends StatelessWidget {
+  const RatelyFarmsApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Rately Farms',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
+      home: const HomePage(),
+    );
+  }
+}
+
+class Batch {
+  String id;
+  String name;
+  String category;
+  String breed;
+  String shed;
+  DateTime startDate;
+  int initialBirds;
+  String status;
+
+  Batch({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.breed,
+    required this.shed,
+    required this.startDate,
+    required this.initialBirds,
+    required this.status,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'category': category,
+        'breed': breed,
+        'shed': shed,
+        'startDate': startDate.toIso8601String(),
+        'initialBirds': initialBirds,
+        'status': status,
+      };
+
+  factory Batch.fromJson(Map<String, dynamic> json) => Batch(
+        id: json['id'],
+        name: json['name'],
+        category: json['category'],
+        breed: json['breed'],
+        shed: json['shed'],
+        startDate: DateTime.parse(json['startDate']),
+        initialBirds: json['initialBirds'],
+        status: json['status'],
+      );
+}
+
+List<Batch> batches = [];
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Rately Farms'), centerTitle: true),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const AddBatchPage()),
+                ),
+                icon: const Icon(Icons.add_business),
+                label: const Text('Add Batch'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const BatchListPage()),
+                ),
+                icon: const Icon(Icons.list),
+                label: const Text('Batch List'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const DailyRecordPage()),
+                ),
+                icon: const Icon(Icons.event_note),
+                label: const Text('Daily Record'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const EggSalePage()),
+                ),
+                icon: const Icon(Icons.egg),
+                label: const Text('Egg Sale'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const BirdSalePage()),
+                ),
+                icon: const Icon(Icons.sell),
+                label: const Text('Bird Sale'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AddBatchPage extends StatefulWidget {
+  const AddBatchPage({super.key});
+
+  @override
+  State<AddBatchPage> createState() => _AddBatchPageState();
+}
+
+class _AddBatchPageState extends State<AddBatchPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  final nameController = TextEditingController();
+  final shedController = TextEditingController();
+  final initialBirdsController = TextEditingController();
+
+  String? category;
+  String? breed;
+  DateTime startDate = DateTime.now();
+
+  final broilerBreeds = ['Ross 308', 'Cobb 500', 'Hubbard', 'Vencob'];
+  final layerBreeds = ['Hy-Line Brown', 'ISA Brown', 'Lohmann', 'White Leghorn', 'Sonali'];
+  final dualBreeds = ['Rhode Island Red', 'Plymouth Rock', 'Deshi'];
+
+  List<String> get breedList {
+    if (category == 'Broiler') return broilerBreeds;
+    if (category == 'Layer') return layerBreeds;
+    if (category == 'Dual Purpose') return dualBreeds;
+    return [];
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    shedController.dispose();
+    initialBirdsController.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: startDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => startDate = picked);
+  }
+
+  Future<void> saveBatch() async {
+    if (_formKey.currentState!.validate()) {
+      final batch = Batch(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameController.text.trim(),
+        category: category!,
+        breed: breed!,
+        shed: shedController.text.trim(),
+        startDate: startDate,
+        initialBirds: int.parse(initialBirdsController.text.trim()),
+        status: 'Active',
+      );
+
+      batches.add(batch);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'batches',
+        batches.map((e) => jsonEncode(e.toJson())).toList(),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Batch saved')),
+      );
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add Batch')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Batch Name',
+                  hintText: 'B-2026-01',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Batch Name দিন' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: category,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Broiler', child: Text('Broiler')),
+                  DropdownMenuItem(value: 'Layer', child: Text('Layer')),
+                  DropdownMenuItem(value: 'Dual Purpose', child: Text('Dual Purpose')),
+                ],
+                onChanged: (v) {
+                  setState(() {
+                    category = v;
+                    breed = null;
+                  });
+                },
+                validator: (v) => v == null ? 'Category নির্বাচন করুন' : null,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: breed,
+                decoration: const InputDecoration(
+                  labelText: 'Breed',
+                  border: OutlineInputBorder(),
+                ),
+                items: breedList
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                    .toList(),
+                onChanged: (v) => setState(() => breed = v),
+                validator: (v) => v == null ? 'Breed নির্বাচন করুন' : null,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: shedController,
+                decoration: const InputDecoration(
+                  labelText: 'Shed / House (optional)',
+                  hintText: 'Shed-1',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: initialBirdsController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Initial Birds',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Initial Birds দিন' : null,
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Start Date: ${startDate.toLocal()}'.split(' ')[0]),
+                  ),
+                  TextButton(
+                    onPressed: pickDate,
+                    child: const Text('Change Date'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: saveBatch,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Save Batch'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class BatchListPage extends StatefulWidget {
+  const BatchListPage({super.key});
+
+  @override
+  State<BatchListPage> createState() => _BatchListPageState();
+}
+
+class _BatchListPageState extends State<BatchListPage> {
+  @override
+  void initState() {
+    super.initState();
+    loadBatches();
+  }
+
+  Future<void> loadBatches() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('batches') ?? [];
+    setState(() {
+      batches = saved.map((e) => Batch.fromJson(jsonDecode(e))).toList();
+    });
+  }
+
+  Future<void> saveBatches() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'batches',
+      batches.map((e) => jsonEncode(e.toJson())).toList(),
+    );
+  }
+
+  Future<void> confirmDelete(BuildContext context, int index) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Batch?'),
+        content: const Text('আপনি কি এই batch মুছতে চান?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      setState(() {
+        batches.removeAt(index);
+      });
+      await saveBatches();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Batch List')),
+      body: batches.isEmpty
+          ? const Center(child: Text('কোনো batch নেই'))
+          : ListView.builder(
+              itemCount: batches.length,
+              itemBuilder: (context, index) {
+                final b = batches[index];
+                return ListTile(
+                  leading: const Icon(Icons.business),
+                  title: Text('${b.name} (${b.category})'),
+                  subtitle: Text(
+                      '${b.breed} - ${b.initialBirds} birds - ${b.shed}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () => confirmDelete(context, index),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class DailyRecord {
+  String batchId;
+  DateTime date;
+  double feed;
+  double water;
+  int eggs;
+  int mortality;
+  String remarks;
+
+  DailyRecord({
+    required this.batchId,
+    required this.date,
+    required this.feed,
+    required this.water,
+    required this.eggs,
+    required this.mortality,
+    required this.remarks,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'batchId': batchId,
+        'date': date.toIso8601String(),
+        'feed': feed,
+        'water': water,
+        'eggs': eggs,
+        'mortality': mortality,
+        'remarks': remarks,
+      };
+
+  factory DailyRecord.fromJson(Map<String, dynamic> json) => DailyRecord(
+        batchId: json['batchId'],
+        date: DateTime.parse(json['date']),
+        feed: (json['feed'] as num).toDouble(),
+        water: (json['water'] as num).toDouble(),
+        eggs: json['eggs'],
+        mortality: json['mortality'],
+        remarks: json['remarks'],
+      );
+}
+
+List<DailyRecord> dailyRecords = [];
+
+class DailyRecordPage extends StatefulWidget {
+  const DailyRecordPage({super.key});
+
+  @override
+  State<DailyRecordPage> createState() => _DailyRecordPageState();
+}
+
+class _DailyRecordPageState extends State<DailyRecordPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  String? selectedBatchId;
+  final feedController = TextEditingController();
+  final waterController = TextEditingController();
+  final eggsController = TextEditingController();
+  final mortalityController = TextEditingController();
+  final remarksController = TextEditingController();
+
+  DateTime selectedDate = DateTime.now();
+
+  @override
+  void dispose() {
+    feedController.dispose();
+    waterController.dispose();
+    eggsController.dispose();
+    mortalityController.dispose();
+    remarksController.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => selectedDate = picked);
+  }
+
+  Future<void> saveRecord() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        dailyRecords.add(
+          DailyRecord(
+            batchId: selectedBatchId!,
+            date: selectedDate,
+            feed: double.parse(feedController.text.trim()),
+            water: double.parse(waterController.text.trim()),
+            eggs: int.tryParse(eggsController.text.trim()) ?? 0,
+            mortality: int.tryParse(mortalityController.text.trim()) ?? 0,
+            remarks: remarksController.text.trim(),
+          ),
+        );
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'dailyRecords',
+        dailyRecords.map((e) => jsonEncode(e.toJson())).toList(),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Daily record saved')),
+      );
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Daily Record')),
+      body: batches.isEmpty
+          ? const Center(child: Text('আগে একটি Batch তৈরি করুন'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedBatchId,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Batch',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: batches
+                          .map((b) => DropdownMenuItem(
+                                value: b.id,
+                                child: Text('${b.name} (${b.category})'),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => selectedBatchId = v),
+                      validator: (v) =>
+                          v == null ? 'Batch নির্বাচন করুন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: feedController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Feed Used (kg)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Feed দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: waterController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Water Used (L)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Water দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: eggsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Eggs Collected (Layer only)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: mortalityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Mortality',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: remarksController,
+                      decoration: const InputDecoration(
+                        labelText: 'Remarks (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                              'Date: ${selectedDate.toLocal()}'.split(' ')[0]),
+                        ),
+                        TextButton(
+                          onPressed: pickDate,
+                          child: const Text('Change Date'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: saveRecord,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save Record'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class EggSale {
+  String batchId;
+  DateTime date;
+  String eggType;
+  int eggsSold;
+  double pricePerEgg;
+  double totalAmount;
+  String buyerName;
+
+  EggSale({
+    required this.batchId,
+    required this.date,
+    required this.eggType,
+    required this.eggsSold,
+    required this.pricePerEgg,
+    required this.totalAmount,
+    required this.buyerName,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'batchId': batchId,
+        'date': date.toIso8601String(),
+        'eggType': eggType,
+        'eggsSold': eggsSold,
+        'pricePerEgg': pricePerEgg,
+        'totalAmount': totalAmount,
+        'buyerName': buyerName,
+      };
+
+  factory EggSale.fromJson(Map<String, dynamic> json) => EggSale(
+        batchId: json['batchId'],
+        date: DateTime.parse(json['date']),
+        eggType: json['eggType'],
+        eggsSold: json['eggsSold'],
+        pricePerEgg: (json['pricePerEgg'] as num).toDouble(),
+        totalAmount: (json['totalAmount'] as num).toDouble(),
+        buyerName: json['buyerName'],
+      );
+}
+
+List<EggSale> eggSales = [];
+
+class EggSalePage extends StatefulWidget {
+  const EggSalePage({super.key});
+
+  @override
+  State<EggSalePage> createState() => _EggSalePageState();
+}
+
+class _EggSalePageState extends State<EggSalePage> {
+  final _formKey = GlobalKey<FormState>();
+
+  String? selectedBatchId;
+  String? eggType;
+  final eggsSoldController = TextEditingController();
+  final pricePerEggController = TextEditingController();
+  final buyerNameController = TextEditingController();
+
+  DateTime selectedDate = DateTime.now();
+
+  double get totalAmount {
+    final eggs = int.tryParse(eggsSoldController.text) ?? 0;
+    final price = double.tryParse(pricePerEggController.text) ?? 0;
+    return eggs * price;
+  }
+
+  @override
+  void dispose() {
+    eggsSoldController.dispose();
+    pricePerEggController.dispose();
+    buyerNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => selectedDate = picked);
+  }
+
+  Future<void> saveSale() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        eggSales.add(
+          EggSale(
+            batchId: selectedBatchId!,
+            date: selectedDate,
+            eggType: eggType!,
+            eggsSold: int.parse(eggsSoldController.text.trim()),
+            pricePerEgg: double.parse(pricePerEggController.text.trim()),
+            totalAmount: totalAmount,
+            buyerName: buyerNameController.text.trim(),
+          ),
+        );
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'eggSales',
+        eggSales.map((e) => jsonEncode(e.toJson())).toList(),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Egg sale saved')),
+      );
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Egg Sale')),
+      body: batches.isEmpty
+          ? const Center(child: Text('আগে একটি Batch তৈরি করুন'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedBatchId,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Batch',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: batches
+                          .map((b) => DropdownMenuItem(
+                                value: b.id,
+                                child: Text('${b.name} (${b.category})'),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => selectedBatchId = v),
+                      validator: (v) =>
+                          v == null ? 'Batch নির্বাচন করুন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: eggType,
+                      decoration: const InputDecoration(
+                        labelText: 'Egg Type',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'Table Egg', child: Text('Table Egg')),
+                        DropdownMenuItem(
+                            value: 'Hatching Egg', child: Text('Hatching Egg')),
+                      ],
+                      onChanged: (v) => setState(() => eggType = v),
+                      validator: (v) =>
+                          v == null ? 'Egg Type নির্বাচন করুন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: eggsSoldController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Eggs Sold',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Eggs sold দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: pricePerEggController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Price per Egg',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Price দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: buyerNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Buyer Name (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                              'Date: ${selectedDate.toLocal()}'.split(' ')[0]),
+                        ),
+                        TextButton(
+                          onPressed: pickDate,
+                          child: const Text('Change Date'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Total: ${totalAmount.toStringAsFixed(2)} tk',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: saveSale,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save Sale'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class BirdSale {
+  String batchId;
+  DateTime date;
+  int quantity;
+  double totalWeightKg;
+  double pricePerKg;
+  double totalAmount;
+  String buyerName;
+
+  BirdSale({
+    required this.batchId,
+    required this.date,
+    required this.quantity,
+    required this.totalWeightKg,
+    required this.pricePerKg,
+    required this.totalAmount,
+    required this.buyerName,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'batchId': batchId,
+        'date': date.toIso8601String(),
+        'quantity': quantity,
+        'totalWeightKg': totalWeightKg,
+        'pricePerKg': pricePerKg,
+        'totalAmount': totalAmount,
+        'buyerName': buyerName,
+      };
+
+  factory BirdSale.fromJson(Map<String, dynamic> json) => BirdSale(
+        batchId: json['batchId'],
+        date: DateTime.parse(json['date']),
+        quantity: json['quantity'],
+        totalWeightKg: (json['totalWeightKg'] as num).toDouble(),
+        pricePerKg: (json['pricePerKg'] as num).toDouble(),
+        totalAmount: (json['totalAmount'] as num).toDouble(),
+        buyerName: json['buyerName'],
+      );
+}
+
+List<BirdSale> birdSales = [];
+
+class BirdSalePage extends StatefulWidget {
+  const BirdSalePage({super.key});
+
+  @override
+  State<BirdSalePage> createState() => _BirdSalePageState();
+}
+
+class _BirdSalePageState extends State<BirdSalePage> {
+  final _formKey = GlobalKey<FormState>();
+
+  String? selectedBatchId;
+  final quantityController = TextEditingController();
+  final totalWeightController = TextEditingController();
+  final pricePerKgController = TextEditingController();
+  final buyerNameController = TextEditingController();
+
+  DateTime selectedDate = DateTime.now();
+
+  double get totalAmount {
+    final weight = double.tryParse(totalWeightController.text) ?? 0;
+    final price = double.tryParse(pricePerKgController.text) ?? 0;
+    return weight * price;
+  }
+
+  @override
+  void dispose() {
+    quantityController.dispose();
+    totalWeightController.dispose();
+    pricePerKgController.dispose();
+    buyerNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => selectedDate = picked);
+  }
+
+  Future<void> saveSale() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        birdSales.add(
+          BirdSale(
+            batchId: selectedBatchId!,
+            date: selectedDate,
+            quantity: int.parse(quantityController.text.trim()),
+            totalWeightKg: double.parse(totalWeightController.text.trim()),
+            pricePerKg: double.parse(pricePerKgController.text.trim()),
+            totalAmount: totalAmount,
+            buyerName: buyerNameController.text.trim(),
+          ),
+        );
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'birdSales',
+        birdSales.map((e) => jsonEncode(e.toJson())).toList(),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bird sale saved')),
+      );
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bird Sale')),
+      body: batches.isEmpty
+          ? const Center(child: Text('আগে একটি Batch তৈরি করুন'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedBatchId,
+                      decoration: const InputDecoration(
+                        labelText: 'Select Batch',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: batches
+                          .map((b) => DropdownMenuItem(
+                                value: b.id,
+                                child: Text('${b.name} (${b.category})'),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => selectedBatchId = v),
+                      validator: (v) =>
+                          v == null ? 'Batch নির্বাচন করুন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: quantityController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Quantity (birds)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Quantity দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: totalWeightController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Total Weight (kg)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Weight দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: pricePerKgController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Price per kg',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Price per kg দিন' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: buyerNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Buyer Name (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                              'Date: ${selectedDate.toLocal()}'.split(' ')[0]),
+                        ),
+                        TextButton(
+                          onPressed: pickDate,
+                          child: const Text('Change Date'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Total: ${totalAmount.toStringAsFixed(2)} tk',
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: saveSale,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save Sale'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
