@@ -1,8 +1,17 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'management_screens.dart';
+import 'auth_page.dart';
+import 'supabase_config.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
   runApp(const RatelyFarmsApp());
 }
 
@@ -15,7 +24,7 @@ class RatelyFarmsApp extends StatelessWidget {
       title: 'Rately Farms',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
-      home: const HomePage(),
+      home: const AuthGate(child: HomePage()),
     );
   }
 }
@@ -72,7 +81,17 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Rately Farms'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Rately Farms'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout),
+            onPressed: () => SupabaseConfig.client.auth.signOut(),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -231,6 +250,45 @@ class HomePage extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.assessment),
                 label: const Text('Batch Summary'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ExpenseScreenV2()),
+                ),
+                icon: const Icon(Icons.account_balance_wallet),
+                label: const Text('Expenses (New)'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const WeeklyWeightScreenV2()),
+                ),
+                icon: const Icon(Icons.monitor_weight),
+                label: const Text('Weekly Average Weight (New)'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const MarketPriceScreenV2()),
+                ),
+                icon: const Icon(Icons.trending_up),
+                label: const Text('Market Price (New)'),
               ),
             ),
           ],
