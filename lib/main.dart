@@ -10,6 +10,7 @@ import 'models.dart' as cloud_models;
 import 'sales_screen.dart';
 import 'cloud_lists_screen.dart';
 import 'supabase_error_handler.dart';
+import 'cloud_summary_screens.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -181,10 +182,10 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const MonthlySummaryPage()),
+                      builder: (context) => const CloudDateRangeSummaryPage()),
                 ),
                 icon: const Icon(Icons.bar_chart),
-                label: const Text('Monthly Summary'),
+                label: const Text('Date Range Summary'),
               ),
             ),
             const SizedBox(height: 16),
@@ -194,7 +195,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const BatchSummaryPage()),
+                      builder: (context) => const CloudBatchSummaryPage()),
                 ),
                 icon: const Icon(Icons.pie_chart),
                 label: const Text('Batch-wise Summary'),
