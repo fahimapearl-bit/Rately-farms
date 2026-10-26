@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'local_store.dart';
+import 'supabase_repository.dart';
 import 'models.dart';
+import 'supabase_error_handler.dart';
 
 String _dateText(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -16,8 +18,8 @@ String _batchLabel(List<Batch> batches, String id) {
   return id;
 }
 
-Future<List<Batch>> _loadBatchesWithLegacyFallback(LocalStore store) async {
-  final current = await store.getBatches();
+Future<List<Batch>> _loadBatchesWithLegacyFallback(SupabaseRepository cloud) async {
+  final current = await cloud.getBatches();
   if (current.isNotEmpty) return current;
   final prefs = await SharedPreferences.getInstance();
   final legacy = prefs.getStringList('batches') ?? <String>[];
@@ -43,7 +45,7 @@ class ExpenseScreenV2 extends StatefulWidget {
 }
 
 class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
-  final store = LocalStore();
+  final cloud = SupabaseRepository();
   final amountController = TextEditingController();
   final descriptionController = TextEditingController();
   final remarksController = TextEditingController();
@@ -60,8 +62,8 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
   }
 
   Future<void> _load() async {
-    final loadedBatches = await _loadBatchesWithLegacyFallback(store);
-    final loadedExpenses = await store.getExpenses();
+    final loadedBatches = await _loadBatchesWithLegacyFallback(cloud);
+    final loadedExpenses = await cloud.getExpenses();
     if (!mounted) return;
     setState(() {
       batches = loadedBatches;
@@ -84,17 +86,23 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
       _message('Batch নির্বাচন করুন এবং সঠিক amount দিন');
       return;
     }
-    expenses.add(Expense(
-      id: newLocalId(),
-      userId: '',
+    final saved = await SupabaseErrorHandler.run<Expense>(
+      context,
+      operation: 'Expense save',
+      successMessage: 'Expense Supabase-এ save হয়েছে',
+      action: () => cloud.createExpense(Expense(
+      id: '',
+      userId: cloud.userId,
       batchId: batchId!,
       date: date,
       type: expenseType,
       description: descriptionController.text.trim(),
       amount: amount,
       remarks: remarksController.text.trim(),
-    ));
-    await store.saveExpenses(expenses);
+      )),
+    );
+    if (saved == null) return;
+    expenses.insert(0, saved);
     amountController.clear();
     descriptionController.clear();
     remarksController.clear();
@@ -105,9 +113,17 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
       .showSnackBar(SnackBar(content: Text(text)));
 
   Future<void> _delete(Expense item) async {
-    expenses.remove(item);
-    await store.saveExpenses(expenses);
-    if (mounted) setState(() {});
+    final deleted = await SupabaseErrorHandler.run<bool>(
+      context,
+      operation: 'Expense delete',
+      action: () async {
+        await cloud.deleteExpense(item.id);
+        return true;
+      },
+    );
+    if (deleted == true && mounted) {
+      setState(() => expenses.remove(item));
+    }
   }
 
   String _batchName(String id) =>
@@ -186,7 +202,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
               if (expenses.isNotEmpty)
                 Card(
                   margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  color: Colors.green.shade100,
                   child: ListTile(
                     leading: const Icon(Icons.account_balance_wallet),
                     title: const Text('Total expense'),
@@ -199,39 +215,39 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
               Expanded(
                 child: expenses.isEmpty
                     ? const Center(child: Text('কোনো expense নেই'))
-                    : ListView.builder(
+                    : SingleChildScrollView(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        itemCount: expenses.length,
-                        itemBuilder: (context, index) {
-                          final item = expenses[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                              leading: CircleAvatar(
-                                child: Icon(item.type == 'Feed' ? Icons.grass : Icons.receipt_long),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: DataTable(
+                              headingRowColor: MaterialStatePropertyAll(
+                                Colors.green.shade100,
                               ),
-                              title: Text(item.type, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text('${_batchName(item.batchId)}\n${_dateText(item.date)}${item.description.isEmpty ? '' : ' • ${item.description}'}'),
-                              isThreeLine: true,
-                              trailing: SizedBox(
-                                width: 92,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text('${item.amount.toStringAsFixed(2)} tk', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
+                              columns: const [
+                                DataColumn(label: Text('Date')),
+                                DataColumn(label: Text('Batch')),
+                                DataColumn(label: Text('Type')),
+                                DataColumn(label: Text('Description')),
+                                DataColumn(label: Text('Amount')),
+                                DataColumn(label: Text('Action')),
+                              ],
+                              rows: expenses.map((item) => DataRow(cells: [
+                                    DataCell(Text(_dateText(item.date))),
+                                    DataCell(Text(_batchName(item.batchId))),
+                                    DataCell(Text(item.type)),
+                                    DataCell(Text(item.description)),
+                                    DataCell(Text('${item.amount.toStringAsFixed(2)} tk')),
+                                    DataCell(IconButton(
+                                      tooltip: 'Delete',
                                       icon: const Icon(Icons.delete_outline, color: Colors.red),
                                       onPressed: () => _delete(item),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                    )),
+                                  ])).toList(),
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
               ),
             ]),
@@ -247,7 +263,7 @@ class WeeklyWeightScreenV2 extends StatefulWidget {
 }
 
 class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
-  final store = LocalStore();
+  final cloud = SupabaseRepository();
   final sampleController = TextEditingController();
   final weightController = TextEditingController();
   final remarksController = TextEditingController();
@@ -263,8 +279,8 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
   }
 
   Future<void> _load() async {
-    final loadedBatches = await _loadBatchesWithLegacyFallback(store);
-    final loadedWeights = await store.getWeeklyWeights();
+    final loadedBatches = await _loadBatchesWithLegacyFallback(cloud);
+    final loadedWeights = await cloud.getWeeklyWeights();
     if (!mounted) return;
     setState(() {
       batches = loadedBatches;
@@ -290,16 +306,16 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
       );
       return;
     }
-    weights.add(WeeklyWeight(
-      id: newLocalId(),
-      userId: '',
+    final saved = await cloud.createWeeklyWeight(WeeklyWeight(
+      id: '',
+      userId: cloud.userId,
       batchId: batchId!,
       date: date,
       sampleCount: samples,
       averageWeightKg: average,
       remarks: remarksController.text.trim(),
     ));
-    await store.saveWeeklyWeights(weights);
+    weights.insert(0, saved);
     sampleController.clear();
     weightController.clear();
     remarksController.clear();
@@ -372,7 +388,7 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
                               headingRowColor: MaterialStatePropertyAll(
-                                Theme.of(context).colorScheme.primaryContainer,
+                                Colors.green.shade100,
                               ),
                               columns: const [
                                 DataColumn(label: Text('Date')),
@@ -404,7 +420,7 @@ class MarketPriceScreenV2 extends StatefulWidget {
 }
 
 class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
-  final store = LocalStore();
+  final cloud = SupabaseRepository();
   final breedController = TextEditingController();
   final priceController = TextEditingController();
   final marketController = TextEditingController();
@@ -425,7 +441,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
   }
 
   Future<void> _load() async {
-    final loaded = await store.getMarketPrices();
+    final loaded = await cloud.getMarketPrices();
     if (!mounted) return;
     setState(() => prices = loaded..sort((a, b) => b.date.compareTo(a.date)));
   }
@@ -445,9 +461,9 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('সঠিক price দিন')));
       return;
     }
-    prices.add(MarketPrice(
-      id: newLocalId(),
-      userId: '',
+    final saved = await cloud.createMarketPrice(MarketPrice(
+      id: '',
+      userId: cloud.userId,
       date: date,
       type: type,
       category: category,
@@ -457,7 +473,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
       marketName: marketController.text.trim(),
       remarks: remarksController.text.trim(),
     ));
-    await store.saveMarketPrices(prices);
+    prices.insert(0, saved);
     priceController.clear();
     breedController.clear();
     marketController.clear();
@@ -466,8 +482,8 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
   }
 
   Future<void> _delete(MarketPrice item) async {
+    await cloud.deleteMarketPrice(item.id);
     prices.remove(item);
-    await store.saveMarketPrices(prices);
     if (mounted) setState(() {});
   }
 
@@ -536,39 +552,41 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
         Expanded(
           child: prices.isEmpty
               ? const Center(child: Text('কোনো market price নেই'))
-              : ListView.builder(
+              : SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: prices.length,
-                  itemBuilder: (context, index) {
-                    final item = prices[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        leading: CircleAvatar(
-                          backgroundColor: item.type == 'Bird' ? Colors.green.shade100 : Colors.orange.shade100,
-                          child: Icon(item.type == 'Bird' ? Icons.sell : Icons.egg),
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: MaterialStatePropertyAll(
+                          Colors.green.shade100,
                         ),
-                        title: Text(item.category, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${_dateText(item.date)} • ${item.breed.isEmpty ? 'Breed not specified' : item.breed}${item.marketName.isEmpty ? '' : ' • ${item.marketName}'}'),
-                        trailing: SizedBox(
-                          width: 104,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text('${item.price.toStringAsFixed(2)} tk/${item.unit}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
+                        columns: const [
+                          DataColumn(label: Text('Date')),
+                          DataColumn(label: Text('Type')),
+                          DataColumn(label: Text('Category')),
+                          DataColumn(label: Text('Breed')),
+                          DataColumn(label: Text('Market')),
+                          DataColumn(label: Text('Price')),
+                          DataColumn(label: Text('Action')),
+                        ],
+                        rows: prices.map((item) => DataRow(cells: [
+                              DataCell(Text(_dateText(item.date))),
+                              DataCell(Text(item.type)),
+                              DataCell(Text(item.category)),
+                              DataCell(Text(item.breed)),
+                              DataCell(Text(item.marketName)),
+                              DataCell(Text('${item.price.toStringAsFixed(2)} tk/${item.unit}')),
+                              DataCell(IconButton(
+                                tooltip: 'Delete',
                                 icon: const Icon(Icons.delete_outline, color: Colors.red),
                                 onPressed: () => _delete(item),
-                              ),
-                            ],
-                          ),
-                        ),
+                              )),
+                            ])).toList(),
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
         ),
       ]),

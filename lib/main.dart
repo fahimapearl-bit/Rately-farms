@@ -1,10 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'management_screens.dart';
 import 'auth_page.dart';
 import 'supabase_config.dart';
+import 'supabase_repository.dart';
+import 'models.dart' as cloud_models;
+import 'sales_screen.dart';
+import 'cloud_lists_screen.dart';
+import 'supabase_error_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -96,6 +101,15 @@ class HomePage extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: () => SupabaseConfig.client.auth.signOut(),
+                icon: const Icon(Icons.logout),
+                label: const Text('Logout'),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -115,7 +129,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const BatchListPage()),
+                      builder: (context) => const CloudBatchListScreen()),
                 ),
                 icon: const Icon(Icons.list),
                 label: const Text('Batch List'),
@@ -141,10 +155,10 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const EggSalePage()),
+                      builder: (context) => const SalesScreenV2()),
                 ),
-                icon: const Icon(Icons.egg),
-                label: const Text('Egg Sale'),
+                icon: const Icon(Icons.cloud_upload),
+                label: const Text('Sales (Cloud)'),
               ),
             ),
             const SizedBox(height: 16),
@@ -154,33 +168,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const BirdSalePage()),
-                ),
-                icon: const Icon(Icons.sell),
-                label: const Text('Bird Sale'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SalesListPage()),
-                ),
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('Sales List'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const DailyRecordsListPage()),
+                      builder: (context) => const CloudDailyRecordsScreen()),
                 ),
                 icon: const Icon(Icons.fact_check),
                 label: const Text('Daily Records List'),
@@ -219,50 +207,10 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const MarketPricePage()),
-                ),
-                icon: const Icon(Icons.trending_up),
-                label: const Text('Daily Market Price'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const WeightEntryPage()),
-                ),
-                icon: const Icon(Icons.monitor_weight),
-                label: const Text('Weekly Weight'),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const BatchSummaryPage()),
-                ),
-                icon: const Icon(Icons.assessment),
-                label: const Text('Batch Summary'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
                       builder: (context) => const ExpenseScreenV2()),
                 ),
                 icon: const Icon(Icons.account_balance_wallet),
-                label: const Text('Expenses (New)'),
+                label: const Text('Expenses'),
               ),
             ),
             const SizedBox(height: 16),
@@ -275,7 +223,7 @@ class HomePage extends StatelessWidget {
                       builder: (context) => const WeeklyWeightScreenV2()),
                 ),
                 icon: const Icon(Icons.monitor_weight),
-                label: const Text('Weekly Average Weight (New)'),
+                label: const Text('Weekly Average Weight'),
               ),
             ),
             const SizedBox(height: 16),
@@ -288,7 +236,7 @@ class HomePage extends StatelessWidget {
                       builder: (context) => const MarketPriceScreenV2()),
                 ),
                 icon: const Icon(Icons.trending_up),
-                label: const Text('Market Price (New)'),
+                label: const Text('Market Price'),
               ),
             ),
           ],
@@ -1416,29 +1364,60 @@ class _AddBatchPageState extends State<AddBatchPage> {
 
   Future<void> saveBatch() async {
     if (_formKey.currentState!.validate()) {
-      final batch = Batch(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: nameController.text.trim(),
-        category: category!,
-        breed: breed!,
-        shed: shedController.text.trim(),
-        startDate: startDate,
-        initialBirds: int.parse(initialBirdsController.text.trim()),
-        status: 'Active',
-      );
+      final initialBirds = int.tryParse(initialBirdsController.text.trim());
+      if (initialBirds == null || initialBirds <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Initial Birds-এ 0-এর বেশি সংখ্যা দিন')),
+        );
+        return;
+      }
 
-      batches.add(batch);
+      try {
+        final cloud = SupabaseRepository();
+        final cloudBatch = await cloud.createBatch(cloud_models.Batch(
+          id: '',
+          userId: cloud.userId,
+          name: nameController.text.trim(),
+          productionType: 'Bird Production',
+          productionCategory: category!,
+          breed: breed!,
+          startDate: startDate,
+          initialBirds: initialBirds,
+        ));
+        final batch = Batch(
+          id: cloudBatch.id,
+          name: nameController.text.trim(),
+          category: category!,
+          breed: breed!,
+          shed: shedController.text.trim(),
+          startDate: startDate,
+          initialBirds: initialBirds,
+          status: 'Active',
+        );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        'batches',
-        batches.map((e) => jsonEncode(e.toJson())).toList(),
-      );
+        batches.add(batch);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Batch saved')),
-      );
-      Navigator.pop(context);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList(
+          'batches',
+          batches.map((e) => jsonEncode(e.toJson())).toList(),
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Batch Supabase-এ save হয়েছে')),
+        );
+        Navigator.pop(context);
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Batch save হয়নি: $error'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 8),
+          ),
+        );
+      }
     }
   }
 
@@ -1730,33 +1709,57 @@ class _DailyRecordPageState extends State<DailyRecordPage> {
 
   Future<void> saveRecord() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        dailyRecords.add(
-          DailyRecord(
+      final feedKg = double.tryParse(feedController.text.trim());
+      final waterLitre = double.tryParse(waterController.text.trim());
+      if (feedKg == null || feedKg < 0 || waterLitre == null || waterLitre < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Feed এবং Water-এর সঠিক সংখ্যা দিন')),
+        );
+        return;
+      }
+
+      final cloud = SupabaseRepository();
+      final saved = await SupabaseErrorHandler.run<bool>(
+        context,
+        operation: 'Daily record save',
+        successMessage: 'Daily record Supabase-এ save হয়েছে',
+        action: () async {
+          await cloud.createDailyRecord(cloud_models.DailyRecord(
+            id: '',
+            userId: cloud.userId,
             batchId: selectedBatchId!,
             date: selectedDate,
-            feed: double.parse(feedController.text.trim()),
-            water: double.parse(waterController.text.trim()),
-            eggs: int.tryParse(eggsController.text.trim()) ?? 0,
+            shedNumber: '',
+            feedType: '',
+            feedKg: feedKg,
+            waterLitre: waterLitre,
+            eggsCollected: int.tryParse(eggsController.text.trim()) ?? 0,
             mortality: int.tryParse(mortalityController.text.trim()) ?? 0,
             remarks: remarksController.text.trim(),
-          ),
-        );
-      });
+          ));
+          return true;
+        },
+      );
+      if (saved != true) return;
 
+      dailyRecords.add(DailyRecord(
+        batchId: selectedBatchId!,
+        date: selectedDate,
+        feed: feedKg,
+        water: waterLitre,
+        eggs: int.tryParse(eggsController.text.trim()) ?? 0,
+        mortality: int.tryParse(mortalityController.text.trim()) ?? 0,
+        remarks: remarksController.text.trim(),
+      ));
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
         'dailyRecords',
         dailyRecords.map((e) => jsonEncode(e.toJson())).toList(),
       );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Daily record saved')),
-      );
+      if (!mounted) return;
       Navigator.pop(context);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
