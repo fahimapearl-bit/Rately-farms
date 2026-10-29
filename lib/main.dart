@@ -1,3 +1,4 @@
+import "add_batch_screen.dart";
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -117,7 +118,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const AddBatchPage()),
+                      builder: (context) => const AddBatchPageNew()),
                 ),
                 icon: const Icon(Icons.add_business),
                 label: const Text('Add Batch'),
