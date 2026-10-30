@@ -1,3 +1,4 @@
+import "daily_record_screen.dart";
 import "add_batch_screen.dart";
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -144,7 +145,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const DailyRecordPage()),
+                      builder: (context) => const DailyRecordPageNew()),
                 ),
                 icon: const Icon(Icons.event_note),
                 label: const Text('Daily Record'),
@@ -160,7 +161,7 @@ class HomePage extends StatelessWidget {
                       builder: (context) => const SalesScreenV2()),
                 ),
                 icon: const Icon(Icons.cloud_upload),
-                label: const Text('Sales (Cloud)'),
+                label: const Text('Sales'),
               ),
             ),
             const SizedBox(height: 16),
