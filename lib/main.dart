@@ -1,3 +1,4 @@
+import "expense_screen.dart";
 import "batch_list_screen.dart";
 import "daily_record_screen.dart";
 import "add_batch_screen.dart";
@@ -211,7 +212,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const ExpenseScreenV2()),
+                      builder: (context) => const ExpenseScreenNew()),
                 ),
                 icon: const Icon(Icons.account_balance_wallet),
                 label: const Text('Expenses'),
