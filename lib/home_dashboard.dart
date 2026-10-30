@@ -1,4 +1,3 @@
-cat << 'EOF' > lib/home_dashboard.dart
 import 'package:flutter/material.dart';
 import 'supabase_config.dart';
 import 'add_batch_screen.dart';
@@ -349,4 +348,3 @@ class _DashboardItem {
     required this.onTap,
   });
 }
-EOF
