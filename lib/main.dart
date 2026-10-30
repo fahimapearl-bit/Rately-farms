@@ -1,3 +1,4 @@
+import "batch_list_screen.dart";
 import "daily_record_screen.dart";
 import "add_batch_screen.dart";
 import 'dart:convert';
@@ -132,7 +133,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const CloudBatchListScreen()),
+                      builder: (context) => const BatchListScreenNew()),
                 ),
                 icon: const Icon(Icons.list),
                 label: const Text('Batch List'),
