@@ -1,3 +1,4 @@
+import "home_dashboard.dart";
 import "expense_screen.dart";
 import "batch_list_screen.dart";
 import "daily_record_screen.dart";
@@ -34,7 +35,7 @@ class RatelyFarmsApp extends StatelessWidget {
       title: 'Rately Farms',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
-      home: const AuthGate(child: HomePage()),
+      home: const AuthGate(child: const HomeDashboardPage()),
     );
   }
 }
