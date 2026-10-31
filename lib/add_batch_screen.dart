@@ -45,6 +45,14 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // লাইভ মিনি-বেন্টো কার্ড আপডেটের জন্য লিসেনার
+    initialBirdsController.addListener(() => setState(() {}));
+    chickPriceController.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
     nameController.dispose();
     shedController.dispose();
@@ -66,14 +74,13 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     if (picked != null) setState(() => startDate = picked);
   }
 
-  // --- সরাসরি Supabase-এ সেভ করার কোড ---
   Future<void> saveBatchToSupabase() async {
     if (!_formKey.currentState!.validate()) return;
 
     final initialBirds = int.tryParse(initialBirdsController.text.trim());
     if (initialBirds == null || initialBirds <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Initial Birds-এ ০ এর বেশি সংখ্যা দিন')),
+        const SnackBar(content: Text('Please enter a valid Initial Birds count greater than 0')),
       );
       return;
     }
@@ -91,7 +98,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
       final user = client.auth.currentUser;
 
       if (user == null) {
-        throw Exception('ইউজার লগইন করা নেই। অনুগ্রহ করে লগইন করুন।');
+        throw Exception('User is not logged in. Please log in first.');
       }
 
       await client.from('batches').insert({
@@ -106,12 +113,13 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
         'shed': shedController.text.trim(),
         'notes': notesController.text.trim(),
         'start_date': startDate.toIso8601String().split('T').first,
+        'status': 'Active',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('ব্যাচ সফলভাবে Supabase Cloud-এ সেভ হয়েছে!'),
+            content: Text('Batch saved successfully!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -121,7 +129,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('ত্রুটি: $e'),
+            content: Text('Error saving batch: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -132,181 +140,282 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     }
   }
 
+  InputDecoration _inputDeco(String label, {String? hint, IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: icon != null ? Icon(icon, size: 20) : null,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final birdsCount = int.tryParse(initialBirdsController.text.trim()) ?? 0;
+    final pricePerPc = double.tryParse(chickPriceController.text.trim()) ?? 0.0;
+    final totalChickCost = birdsCount * pricePerPc;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Batch')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextFormField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Batch Name *',
-                  hintText: 'Broiler-2026-01',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'ব্যাচের নাম দিন' : null,
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<String>(
-                value: productionType,
-                decoration: const InputDecoration(
-                  labelText: 'Production Type *',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'Meat Production', child: Text('Meat Production')),
-                  DropdownMenuItem(value: 'Egg Production', child: Text('Egg Production')),
-                ],
-                onChanged: (val) {
-                  setState(() {
-                    productionType = val;
-                    productionCategory = currentCategories.isNotEmpty ? currentCategories.first : null;
-                    breed = null;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<String>(
-                value: currentCategories.contains(productionCategory) ? productionCategory : null,
-                decoration: const InputDecoration(
-                  labelText: 'Production Category *',
-                  border: OutlineInputBorder(),
-                ),
-                items: currentCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    productionCategory = val;
-                    breed = null;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              if (productionCategory == 'Other') ...[
-                TextFormField(
-                  controller: customCategoryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Specify Category Name *',
-                    hintText: 'যেমন: কোয়েল, টার্কি ইত্যাদি',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'ক্যাটেগরির নাম লিখুন' : null,
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              DropdownButtonFormField<String>(
-                value: breedList.contains(breed) ? breed : null,
-                decoration: const InputDecoration(
-                  labelText: 'Breed / জাত (optional)',
-                  border: OutlineInputBorder(),
-                ),
-                items: breedList.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                onChanged: (val) => setState(() => breed = val),
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: initialBirdsController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Initial Birds (মোট বাচ্চার সংখ্যা) *',
-                  hintText: '500',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'সংখ্যা দিন' : null,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: chickPriceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'বাচ্চার দর / দাম per pc (টাকা)',
-                  hintText: '50.00',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: sourceController,
-                decoration: const InputDecoration(
-                  labelText: 'Source',
-                  hintText: 'Hatchery',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: shedController,
-                decoration: const InputDecoration(
-                  labelText: 'Shed / শেড নম্বর (optional)',
-                  hintText: 'Shed-1',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Start Date: ${startDate.toLocal()}'.split(' ')[0],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+      appBar: AppBar(
+        title: const Text('Add Batch'),
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ১. Batch Identity Card
+                _buildSectionCard(
+                  title: 'Batch Identity & Type',
+                  icon: Icons.badge_outlined,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: _inputDeco('Batch Name *', hint: 'e.g. Broiler-2026-01', icon: Icons.edit_note),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Please enter batch name' : null,
                     ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: pickDate,
-                    icon: const Icon(Icons.calendar_today, size: 18),
-                    label: const Text('Change Date'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: notesController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notes / মন্তব্য (optional)',
-                  hintText: 'টিকা বা বিশেষ কোনো তথ্য...',
-                  border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: productionType,
+                      decoration: _inputDeco('Production Type *', icon: Icons.category_outlined),
+                      items: const [
+                        DropdownMenuItem(value: 'Meat Production', child: Text('Meat Production')),
+                        DropdownMenuItem(value: 'Egg Production', child: Text('Egg Production')),
+                      ],
+                      onChanged: (val) {
+                        setState(() {
+                          productionType = val;
+                          productionCategory = currentCategories.isNotEmpty ? currentCategories.first : null;
+                          breed = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: currentCategories.contains(productionCategory) ? productionCategory : null,
+                      decoration: _inputDeco('Production Category *', icon: Icons.tune),
+                      items: currentCategories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          productionCategory = val;
+                          breed = null;
+                        });
+                      },
+                    ),
+                    if (productionCategory == 'Other') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: customCategoryController,
+                        decoration: _inputDeco('Specify Category Name *', hint: 'e.g. Quail, Turkey'),
+                        validator: (v) => v == null || v.trim().isEmpty ? 'Please enter category name' : null,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: breedList.contains(breed) ? breed : null,
+                      decoration: _inputDeco('Breed / Strain (optional)', icon: Icons.pets_outlined),
+                      items: breedList.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                      onChanged: (val) => setState(() => breed = val),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24),
 
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton.icon(
-                  onPressed: _isSaving ? null : saveBatchToSupabase,
-                  icon: _isSaving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.cloud_upload),
-                  label: Text(
-                    _isSaving ? 'সংরক্ষণ হচ্ছে...' : 'Save Batch',
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                // ২. Flock & Cost Card (With Live Mini Bento Preview)
+                _buildSectionCard(
+                  title: 'Flock Size & Purchase Cost',
+                  icon: Icons.egg_outlined,
+                  children: [
+                    InkWell(
+                      onTap: pickDate,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.calendar_today, size: 18, color: Colors.blueGrey),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Start Date: ${startDate.toLocal()}'.split(' ')[0],
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const Text('Change', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: initialBirdsController,
+                      keyboardType: TextInputType.number,
+                      decoration: _inputDeco('Initial Birds (Count) *', hint: '500', icon: Icons.numbers),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Please enter bird count' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: chickPriceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: _inputDeco('Chick Price per pc (BDT)', hint: '50.00', icon: Icons.payments_outlined),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // --- Live Mini-Bento KPI Grid (2 Tiles) ---
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.blue.shade100),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Initial Flock', style: TextStyle(fontSize: 11, color: Colors.blue.shade900)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$birdsCount pcs',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue.shade900),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.teal.shade100),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Est. Chick Cost', style: TextStyle(fontSize: 11, color: Colors.teal.shade900)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '৳${totalChickCost.toStringAsFixed(1)}',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
+
+                // ৩. Shed & Logistics Card
+                _buildSectionCard(
+                  title: 'Housing & Logistics',
+                  icon: Icons.warehouse_outlined,
+                  children: [
+                    TextFormField(
+                      controller: shedController,
+                      decoration: _inputDeco('Shed / House No (optional)', hint: 'Shed-1', icon: Icons.roofing),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: sourceController,
+                      decoration: _inputDeco('Chick Source', hint: 'Hatchery name', icon: Icons.local_shipping_outlined),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: notesController,
+                      maxLines: 2,
+                      decoration: _inputDeco('Notes / Remarks (optional)', hint: 'Vaccine, batch remarks...', icon: Icons.notes),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      // ফিক্সড ও সেফ এরিয়া সহ সেভ বাটন (কখনও হোম কী-এর নিচে ঢুকবে না)
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                offset: const Offset(0, -2),
+                blurRadius: 6,
               ),
             ],
+          ),
+          child: SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: _isSaving ? null : saveBatchToSupabase,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: Text(
+                _isSaving ? 'Saving Batch...' : 'Save Batch',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
         ),
       ),
