@@ -16,8 +16,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  String? _historyError;
   List<Map<String, dynamic>> _batches = [];
-  Map<String, dynamic>? _selectedBatch;
+  String? _selectedBatchId;
 
   DateTime _selectedDate = DateTime.now();
   final _weightController = TextEditingController();
@@ -26,11 +27,20 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
   List<Map<String, dynamic>> _weightHistory = [];
 
+  Map<String, dynamic>? get _selectedBatch {
+    for (final batch in _batches) {
+      if (batch['id'] == _selectedBatchId) return batch;
+    }
+    return _batches.isEmpty ? null : _batches.first;
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchBatches();
-    _weightController.addListener(() => setState(() {}));
+    _weightController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -44,9 +54,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   Future<void> _fetchBatches() async {
     setState(() => _loading = true);
     try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please log in first');
+
       final res = await supabase
           .from('batches')
           .select()
+          .eq('user_id', user.id)
           .order('start_date', ascending: false);
 
       final list = List<Map<String, dynamic>>.from(res);
@@ -54,17 +68,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         final st = (b['status'] ?? 'Active').toString().toLowerCase();
         return st == 'active';
       }).toList();
+      final batches = active.isNotEmpty ? active : list;
 
       setState(() {
-        _batches = active.isNotEmpty ? active : list;
-        if (_batches.isNotEmpty) {
-          _selectedBatch = _batches.first;
+        _batches = batches;
+        if (batches.isNotEmpty &&
+            (_selectedBatchId == null ||
+                !batches.any((b) => b['id'] == _selectedBatchId))) {
+          _selectedBatchId = batches.first['id']?.toString();
         }
         _loading = false;
       });
 
-      if (_selectedBatch != null) {
-        _fetchHistory(_selectedBatch!['id']);
+      final selected = _selectedBatch;
+      if (selected != null) {
+        await _fetchHistory(selected['id']);
       }
     } catch (e) {
       if (mounted) {
@@ -78,80 +96,118 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
   Future<void> _fetchHistory(dynamic batchId) async {
     try {
-      final res = await supabase
-          .from('daily_records')
-          .select()
-          .eq('batch_id', batchId)
-          .not('average_weight', 'is', null)
-          .order('record_date', ascending: false);
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please log in first');
 
+      final res = await supabase
+          .from('weekly_weights')
+          .select()
+          .eq('user_id', user.id)
+          .eq('batch_id', batchId)
+          .order('weight_date', ascending: false);
+
+      if (!mounted) return;
       setState(() {
         _weightHistory = List<Map<String, dynamic>>.from(res);
+        _historyError = null;
       });
-    } catch (_) {
-      // যদি daily_records এ average_weight কলাম সরাসরি না থাকে, কোনো ক্র্যাশ হবে না
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _weightHistory = [];
+        _historyError = '$e';
+      });
     }
   }
 
   int _calculateAge(String? startDateStr, DateTime targetDate) {
-    if (startDateStr == null) return 0;
+    if (startDateStr == null || startDateStr.isEmpty) return 0;
     try {
       final start = DateTime.parse(startDateStr);
-      final diff = targetDate.difference(start).inDays;
+      final startDay = DateTime(start.year, start.month, start.day);
+      final targetDay = DateTime(targetDate.year, targetDate.month, targetDate.day);
+      final diff = targetDay.difference(startDay).inDays;
       return diff >= 0 ? diff : 0;
     } catch (_) {
       return 0;
     }
   }
 
+  double? _gramsFromRow(Map<String, dynamic> row) {
+    final kg = row['average_weight_kg'];
+    if (kg is num && kg > 0) return kg.toDouble() * 1000;
+    return null;
+  }
+
   Future<void> _saveWeight() async {
     if (!_formKey.currentState!.validate() || _selectedBatch == null) return;
 
-    final weightVal = double.tryParse(_weightController.text.trim());
-    if (weightVal == null || weightVal <= 0) {
+    final weightGrams = double.tryParse(_weightController.text.trim());
+    final sampleCount = int.tryParse(_sampleCountController.text.trim());
+    if (weightGrams == null || weightGrams <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid weight in grams')),
+      );
+      return;
+    }
+    if (sampleCount == null || sampleCount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sample count must be at least 1')),
       );
       return;
     }
 
     setState(() => _saving = true);
     try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please log in first');
+
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final batchId = _selectedBatch!['id'];
+      final weightKg = double.parse((weightGrams / 1000).toStringAsFixed(3));
+      final remarks = _notesController.text.trim();
+      final payload = {
+        'sample_count': sampleCount,
+        'average_weight_kg': weightKg,
+        'remarks': remarks.isEmpty ? null : remarks,
+      };
 
-      // ১. daily_records টেবিলে রেকর্ডটি আপডেট বা ইনসার্ট করা
       final existing = await supabase
-          .from('daily_records')
+          .from('weekly_weights')
           .select('id')
+          .eq('user_id', user.id)
           .eq('batch_id', batchId)
-          .eq('record_date', dateStr)
-          .maybeSingle();
+          .eq('weight_date', dateStr)
+          .limit(1);
 
-      if (existing != null) {
-        await supabase.from('daily_records').update({
-          'average_weight': weightVal,
-          'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-        }).eq('id', existing['id']);
+      final existingRows = List<Map<String, dynamic>>.from(existing);
+      if (existingRows.isNotEmpty) {
+        await supabase
+            .from('weekly_weights')
+            .update(payload)
+            .eq('id', existingRows.first['id'])
+            .eq('user_id', user.id);
       } else {
-        await supabase.from('daily_records').insert({
+        await supabase.from('weekly_weights').insert({
+          'user_id': user.id,
           'batch_id': batchId,
-          'record_date': dateStr,
-          'average_weight': weightVal,
-          'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+          'weight_date': dateStr,
+          ...payload,
         });
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Average weight saved successfully!'),
-            backgroundColor: Color(0xFF2E7D32),
+          SnackBar(
+            content: Text(
+              'Saved \( {weightGrams.toStringAsFixed(0)} g ( \){weightKg.toStringAsFixed(3)} kg)',
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
           ),
         );
         _weightController.clear();
         _notesController.clear();
-        _fetchHistory(batchId);
+        await _fetchHistory(batchId);
       }
     } catch (e) {
       if (mounted) {
@@ -182,9 +238,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       );
     }
 
-    final age = _calculateAge(_selectedBatch?['start_date'], _selectedDate);
-    final category = _selectedBatch?['production_category']?.toString();
-    final breed = _selectedBatch?['breed']?.toString();
+    final batch = _selectedBatch;
+    final age = _calculateAge(batch?['start_date']?.toString(), _selectedDate);
+    final category = batch?['production_category']?.toString();
+    final breed = batch?['breed']?.toString();
     final stdWeight = PoultryStandards.getStandardWeight(
       ageInDays: age,
       category: category,
@@ -215,7 +272,6 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ১. ব্যাচ সিলেক্টর কার্ড
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -230,36 +286,34 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   children: [
                     const Text('Select Batch', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey)),
                     const SizedBox(height: 6),
-                    DropdownButtonFormField<Map<String, dynamic>>(
-                      value: _selectedBatch,
+                    DropdownButtonFormField<String>(
+                      value: _selectedBatchId,
                       isExpanded: true,
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       items: _batches.map((b) {
-                        final name = b['batch_name'] ?? 'Unnamed';
-                        final cat = b['production_category'] ?? '';
+                        final name = (b['name'] ?? b['batch_name'] ?? 'Unnamed').toString();
+                        final cat = (b['production_category'] ?? '').toString();
                         return DropdownMenuItem(
-                          value: b,
-                          child: Text('$name ($cat)'),
+                          value: b['id'].toString(),
+                          child: Text(cat.isEmpty ? name : '$name ($cat)', overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (val) {
-                        setState(() {
-                          _selectedBatch = val;
-                        });
-                        if (val != null) _fetchHistory(val['id']);
+                        setState(() => _selectedBatchId = val);
+                        if (val != null) _fetchHistory(val);
                       },
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         _tagBadge('Age: $age Days', const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
-                        const SizedBox(width: 8),
                         if (breed != null && breed.isNotEmpty)
                           _tagBadge(breed, const Color(0xFFE3F2FD), const Color(0xFF1565C0)),
-                        const SizedBox(width: 8),
                         if (category != null && category.isNotEmpty)
                           _tagBadge(category, const Color(0xFFFFF3E0), const Color(0xFFE65100)),
                       ],
@@ -270,10 +324,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
               const SizedBox(height: 16),
 
-              // ২. ইন্টেলিজেন্ট বেঞ্চমার্ক ও লাইভ তুলনা Bento কার্ড
               Row(
                 children: [
-                  // টার্গেট স্ট্যান্ডার্ড কার্ড
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -289,7 +341,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                             children: [
                               Icon(Icons.flag_outlined, size: 16, color: Colors.indigo),
                               SizedBox(width: 6),
-                              Text('Standard Target', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+                              Expanded(
+                                child: Text('Standard Target', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -303,7 +357,6 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // লাইভ ভ্যারিয়েন্স কার্ড
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(16),
@@ -321,13 +374,18 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                             children: [
                               Icon(Icons.compare_arrows, size: 16, color: evaluation != null ? Color(evaluation.colorHex) : Colors.grey),
                               const SizedBox(width: 6),
-                              Text('Comparison', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: evaluation != null ? Color(evaluation.colorHex) : Colors.grey)),
+                              Expanded(
+                                child: Text(
+                                  'Comparison',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: evaluation != null ? Color(evaluation.colorHex) : Colors.grey),
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Text(
                             evaluation != null
-                                ? '${evaluation.diffGrams >= 0 ? '+' : ''}${evaluation.diffGrams.toStringAsFixed(0)} g'
+                                ? '\( {evaluation.diffGrams >= 0 ? '+' : ''} \){evaluation.diffGrams.toStringAsFixed(0)} g'
                                 : '--',
                             style: TextStyle(
                               fontSize: 22,
@@ -336,7 +394,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                             ),
                           ),
                           Text(
-                            evaluation != null ? '${evaluation.diffPercent >= 0 ? '+' : ''}${evaluation.diffPercent.toStringAsFixed(1)}%' : 'Type weight below',
+                            evaluation != null ? '\( {evaluation.diffPercent >= 0 ? '+' : ''} \){evaluation.diffPercent.toStringAsFixed(1)}%' : 'Type weight below',
                             style: TextStyle(fontSize: 11, color: evaluation != null ? Color(evaluation.colorHex) : Colors.grey),
                           ),
                         ],
@@ -372,7 +430,6 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
               const SizedBox(height: 16),
 
-              // ৩. ইনপুট ফর্ম কার্ড
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -385,16 +442,16 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // তারিখ নির্বাচন
                     Row(
                       children: [
                         const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                         const SizedBox(width: 8),
-                        Text(
-                          'Date: ${DateFormat('dd MMM yyyy').format(_selectedDate)}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        Expanded(
+                          child: Text(
+                            'Date: ${DateFormat('dd MMM yyyy').format(_selectedDate)}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
-                        const Spacer(),
                         TextButton(
                           onPressed: () async {
                             final d = await showDatePicker(
@@ -411,13 +468,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                     ),
                     const Divider(height: 20),
 
-                    // গড় ওজন ইনপুট
                     TextFormField(
                       controller: _weightController,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
-                        labelText: 'Average Weight (in Grams) *',
+                        labelText: 'Average Weight (grams per bird) *',
                         hintText: 'e.g. 850',
+                        helperText: '850 g is saved as 0.850 kg',
                         suffixText: 'g',
                         prefixIcon: const Icon(Icons.scale),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -426,13 +483,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                         if (v == null || v.trim().isEmpty) return 'Enter average weight';
                         final n = double.tryParse(v.trim());
                         if (n == null || n <= 0) return 'Enter a positive number';
+                        if (n > 20000) return 'Weight looks too high for one bird';
                         return null;
                       },
                     ),
 
                     const SizedBox(height: 12),
 
-                    // স্যাম্পল পাখির সংখ্যা ও নোট
                     Row(
                       children: [
                         Expanded(
@@ -440,10 +497,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                             controller: _sampleCountController,
                             keyboardType: TextInputType.number,
                             decoration: InputDecoration(
-                              labelText: 'Sample Count',
+                              labelText: 'Sample Count *',
                               hintText: '10',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             ),
+                            validator: (v) {
+                              final n = int.tryParse((v ?? '').trim());
+                              if (n == null || n <= 0) return 'At least 1';
+                              return null;
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -484,10 +546,19 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
               const SizedBox(height: 24),
 
-              // ৪. রেকর্ড হিস্ট্রি
               const Text('Weight History (This Batch)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              if (_weightHistory.isEmpty)
+              if (_historyError != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEBEE),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('Could not load history: $_historyError', style: const TextStyle(color: Color(0xFFC62828))),
+                )
+              else if (_weightHistory.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(24),
                   alignment: Alignment.center,
@@ -504,25 +575,65 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   itemCount: _weightHistory.length,
                   itemBuilder: (ctx, i) {
                     final item = _weightHistory[i];
-                    final date = item['record_date']?.toString() ?? '';
-                    final w = item['average_weight'];
-                    final notes = item['notes']?.toString();
+                    final dateRaw = item['weight_date']?.toString() ?? '';
+                    final grams = _gramsFromRow(item);
+                    final kg = grams == null ? null : grams / 1000;
+                    final samples = item['sample_count'];
+                    final notes = item['remarks']?.toString();
+                    DateTime? recordDay;
+                    try {
+                      recordDay = DateTime.parse(dateRaw);
+                    } catch (_) {}
+                    final recordAge = recordDay == null
+                        ? null
+                        : _calculateAge(batch?['start_date']?.toString(), recordDay);
+                    final recordStd = recordAge == null
+                        ? null
+                        : PoultryStandards.getStandardWeight(
+                            ageInDays: recordAge,
+                            category: category,
+                            breed: breed,
+                          );
+                    WeightEvaluation? past;
+                    if (grams != null && recordStd != null) {
+                      past = PoultryStandards.evaluate(
+                        actualWeight: grams,
+                        standardWeight: recordStd,
+                      );
+                    }
+                    final dateLabel = recordDay == null
+                        ? dateRaw
+                        : DateFormat('dd MMM yyyy').format(recordDay);
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       elevation: 0.5,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: Color(0xFFE8F5E9),
-                          child: Icon(Icons.scale, color: Color(0xFF2E7D32)),
+                        leading: CircleAvatar(
+                          backgroundColor: past == null
+                              ? const Color(0xFFE8F5E9)
+                              : Color(past.colorHex).withOpacity(0.15),
+                          child: Icon(
+                            Icons.scale,
+                            color: past == null ? const Color(0xFF2E7D32) : Color(past.colorHex),
+                          ),
                         ),
                         title: Text(
-                          '$w g',
+                          grams == null
+                              ? '—'
+                              : '\( {grams.toStringAsFixed(0)} g  ( \){kg!.toStringAsFixed(3)} kg)',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Date: $date ${notes != null && notes.isNotEmpty ? '• $notes' : ''}',
+                          [
+                            dateLabel,
+                            if (recordAge != null) 'Day $recordAge',
+                            if (samples != null) '$samples birds',
+                            if (past != null)
+                              '\( {past.status} ( \){past.diffGrams >= 0 ? '+' : ''}${past.diffGrams.toStringAsFixed(0)} g)',
+                            if (notes != null && notes.isNotEmpty) notes,
+                          ].join(' • '),
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),
