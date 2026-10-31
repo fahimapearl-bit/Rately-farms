@@ -915,20 +915,82 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
     }
   }
 
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _batchBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = data;
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Batch-wise Summary (Cloud)'),
-        actions: [IconButton(onPressed: loadData, icon: const Icon(Icons.refresh))],
+        title: const Text('Batch-wise Summary'),
+        actions: [
+          IconButton(
+            onPressed: loadData,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
               ? _ErrorView(message: '$error', onRetry: loadData)
               : current == null || current.batches.isEmpty
-                  ? const Center(child: Text('আগে একটি Batch তৈরি করুন'))
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'কোনো ব্যাচ পাওয়া যায়নি',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text('সঠিক সামারি দেখতে আগে একটি ব্যাচ তৈরি করুন।'),
+                          ],
+                        ),
+                      ),
+                    )
                   : _buildBody(current),
     );
   }
@@ -951,106 +1013,445 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
 
     final birdsSold = sales.where((s) => s.type == 'Bird').fold(0, (sum, s) => sum + s.quantity);
     final currentBirds = (batch.initialBirds - mortality - birdsSold).clamp(0, batch.initialBirds);
+    final netCash = income - expense;
+    final isSurplus = netCash >= 0;
+
+    final survivalPct = batch.initialBirds > 0 ? (currentBirds / batch.initialBirds) * 100 : 0.0;
+    final mortalityPct = batch.initialBirds > 0 ? (mortality / batch.initialBirds) * 100 : 0.0;
+    final soldPct = batch.initialBirds > 0 ? (birdsSold / batch.initialBirds) * 100 : 0.0;
+
+    // Group expenses by type
+    final Map<String, double> expenseByType = {};
+    for (final exp in expenses) {
+      final key = exp.type.isEmpty ? 'General' : exp.type;
+      expenseByType[key] = (expenseByType[key] ?? 0.0) + exp.amount;
+    }
+
+    // Standing biomass calculation
+    final standingBiomassKg = currentBirds > 0 && avgWeight > 0 ? currentBirds * avgWeight : 0.0;
+
+    // FCR estimation if broiler / meat
+    final isEggType = batch.productionType.toLowerCase().contains('egg');
+    final double? fcr = (!isEggType && avgWeight > 0 && currentBirds > 0 && feed > 0)
+        ? (feed / ((currentBirds * avgWeight) + (birdsSold * (avgWeight > 0 ? avgWeight : 1.5))))
+        : null;
 
     return RefreshIndicator(
       onRefresh: loadData,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         children: [
-          DropdownButtonFormField<String>(
-            value: selectedBatchId,
-            decoration: const InputDecoration(labelText: 'Select batch', border: OutlineInputBorder()),
-            items: current.batches
-                .map((item) => DropdownMenuItem(
-                      value: item.id,
-                      child: Text('${item.name} (${item.breed})'),
-                    ))
-                .toList(),
-            onChanged: (value) => setState(() => selectedBatchId = value),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(batch.name, style: Theme.of(context).textTheme.titleLarge),
+          // 1. Batch Selector & Metadata Card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedBatchId,
+                  decoration: InputDecoration(
+                    labelText: 'Select Batch',
+                    prefixIcon: const Icon(Icons.layers_outlined, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
-                  _summaryRow('Production', '${batch.productionType} / ${batch.productionCategory}'),
-                  _summaryRow('Start date', _date(batch.startDate)),
-                  _summaryRow('Batch running days', '${_runningDays(batch.startDate)} days'),
-                  _summaryRow('Initial birds', '${batch.initialBirds}'),
-                  _summaryRow('Mortality', '$mortality'),
-                  _summaryRow('Birds sold', '$birdsSold'),
-                  _summaryRow('Current birds alive', '$currentBirds'),
-                  _summaryRow('Daily records', '${records.length}'),
-                  _summaryRow('Total feed', '${feed.toStringAsFixed(2)} kg'),
-                  _summaryRow('Total water', '${water.toStringAsFixed(2)} L'),
-                  _summaryRow('Eggs collected', '$eggs'),
-                  _summaryRow('Latest average weight', '${avgWeight.toStringAsFixed(2)} kg'),
-                ],
-              ),
+                  items: current.batches
+                      .map((item) => DropdownMenuItem(
+                            value: item.id,
+                            child: Text(
+                              '${item.name} (${item.breed})',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (value) => setState(() => selectedBatchId = value),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _batchBadge(
+                      '${batch.productionType} • ${batch.productionCategory.isEmpty ? "General" : batch.productionCategory}',
+                      Colors.teal.shade700,
+                    ),
+                    _batchBadge(
+                      batch.breed.isEmpty ? 'Mixed Breed' : batch.breed,
+                      Colors.indigo.shade700,
+                    ),
+                    _batchBadge(
+                      '${_runningDays(batch.startDate)} Days Running',
+                      Colors.orange.shade800,
+                    ),
+                    _batchBadge(
+                      'Start: ${_date(batch.startDate)}',
+                      Colors.blueGrey.shade700,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text('Batch Financial Summary', style: Theme.of(context).textTheme.titleMedium),
-                  _summaryRow('Total Sales', _money(income)),
-                  _summaryRow('Total Expenses', _money(expense)),
-                  const Divider(),
-                  _summaryRow(
-                    income - expense >= 0 ? 'Net profit' : 'Net loss',
-                    _money((income - expense).abs()),
-                  ),
-                ],
+
+          // 2. Flock Dynamics (Bento KPI 2x2)
+          _buildSectionHeader('Flock Dynamics (পাখির স্থিতি)', Icons.pets, Colors.teal),
+          Row(
+            children: [
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Current Live Birds',
+                  value: '$currentBirds',
+                  subtitle: '${survivalPct.toStringAsFixed(1)}% alive',
+                  icon: Icons.favorite,
+                  iconColor: const Color(0xFF059669),
+                  bgColor: const Color(0xFFECFDF5),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Initial Birds',
+                  value: '${batch.initialBirds}',
+                  subtitle: 'Start flock',
+                  icon: Icons.inventory_2_outlined,
+                  iconColor: Colors.blue.shade700,
+                  bgColor: Colors.blue.shade50,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Sales breakdown', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  if (sales.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('এই ব্যাচে এখনো কোনো সেল রেকর্ড করা হয়নি'),
-                    )
-                  else
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: MaterialStatePropertyAll<Color?>(Colors.blue.shade50),
-                        columns: const [
-                          DataColumn(label: Text('Date')),
-                          DataColumn(label: Text('Type')),
-                          DataColumn(label: Text('Qty')),
-                          DataColumn(label: Text('Amount')),
-                        ],
-                        rows: sales
-                            .map((item) => DataRow(cells: [
-                                  DataCell(Text(_date(item.date))),
-                                  DataCell(Text(item.type)),
-                                  DataCell(Text('${item.quantity}')),
-                                  DataCell(Text(_money(item.totalAmount))),
-                                ]))
-                            .toList(),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Mortality',
+                  value: '$mortality',
+                  subtitle: '${mortalityPct.toStringAsFixed(1)}% loss',
+                  icon: Icons.warning_amber_rounded,
+                  iconColor: Colors.red.shade700,
+                  bgColor: Colors.red.shade50,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Birds Sold',
+                  value: '$birdsSold',
+                  subtitle: '${soldPct.toStringAsFixed(1)}% sold',
+                  icon: Icons.shopping_cart_checkout,
+                  iconColor: Colors.purple.shade700,
+                  bgColor: Colors.purple.shade50,
+                ),
+              ),
+            ],
+          ),
+
+          // 3. Feed & Production Bento Grid (2x2)
+          _buildSectionHeader('Feed & Production (খাদ্য ও ওজন)', Icons.restaurant, Colors.amber.shade800),
+          Row(
+            children: [
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Total Feed',
+                  value: '${feed.toStringAsFixed(1)} kg',
+                  subtitle: batch.initialBirds > 0
+                      ? '${(feed / batch.initialBirds).toStringAsFixed(2)} kg/bird'
+                      : null,
+                  icon: Icons.grain,
+                  iconColor: Colors.amber.shade800,
+                  bgColor: Colors.amber.shade50,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Total Water',
+                  value: '${water.toStringAsFixed(0)} L',
+                  subtitle: feed > 0 ? '${(water / feed).toStringAsFixed(1)} L/kg feed' : null,
+                  icon: Icons.water_drop,
+                  iconColor: Colors.cyan.shade700,
+                  bgColor: Colors.cyan.shade50,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Avg Weight',
+                  value: avgWeight > 0 ? '${avgWeight.toStringAsFixed(2)} kg' : 'N/A',
+                  subtitle: fcr != null && fcr > 0 && fcr < 10
+                      ? 'Est. FCR: ${fcr.toStringAsFixed(2)}'
+                      : weights.isNotEmpty
+                          ? '${weights.length} weigh-ins'
+                          : 'No weigh-ins',
+                  icon: Icons.scale,
+                  iconColor: Colors.indigo.shade700,
+                  bgColor: Colors.indigo.shade50,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: isEggType
+                    ? _BentoKpiCard(
+                        title: 'Eggs Collected',
+                        value: '$eggs',
+                        subtitle: '${records.length} logs',
+                        icon: Icons.egg_outlined,
+                        iconColor: Colors.orange.shade800,
+                        bgColor: Colors.orange.shade50,
+                      )
+                    : _BentoKpiCard(
+                        title: 'Daily Logs',
+                        value: '${records.length}',
+                        subtitle: 'Log entries',
+                        icon: Icons.assignment_turned_in_outlined,
+                        iconColor: Colors.teal.shade700,
+                        bgColor: Colors.teal.shade50,
+                      ),
+              ),
+            ],
+          ),
+
+          // 4. Financial Snapshot & Standing Flock Asset
+          _buildSectionHeader('Financial Snapshot (আর্থিক স্থিতি)', Icons.account_balance_wallet, Colors.green.shade800),
+          Row(
+            children: [
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Total Sales',
+                  value: _money(income),
+                  subtitle: '${sales.length} invoices',
+                  icon: Icons.trending_up,
+                  iconColor: Colors.green.shade700,
+                  bgColor: Colors.green.shade50,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BentoKpiCard(
+                  title: 'Total Expenses',
+                  value: _money(expense),
+                  subtitle: '${expenses.length} entries',
+                  icon: Icons.trending_down,
+                  iconColor: Colors.red.shade700,
+                  bgColor: Colors.red.shade50,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Cash Flow & Standing Asset Banner Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isSurplus ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSurplus ? Colors.green.shade300 : Colors.amber.shade300,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isSurplus ? 'Net Cash Surplus' : 'Net Cash Deficit (Investment)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isSurplus ? Colors.green.shade800 : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${isSurplus ? "+" : ""}${_money(netCash)}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: isSurplus ? Colors.green.shade900 : Colors.amber.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: isSurplus
+                            ? Colors.green.withOpacity(0.15)
+                            : Colors.amber.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isSurplus ? Icons.check_circle_outline : Icons.schedule,
+                        color: isSurplus ? Colors.green.shade800 : Colors.amber.shade900,
+                        size: 24,
                       ),
                     ),
+                  ],
+                ),
+                if (standingBiomassKg > 0) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Divider(
+                      height: 1,
+                      color: (isSurplus ? Colors.green : Colors.amber).shade200,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(Icons.inventory_2, size: 16, color: Colors.blueGrey.shade700),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Standing Flock Asset: $currentBirds birds (~${standingBiomassKg.toStringAsFixed(1)} kg live biomass on farm)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blueGrey.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
+
+          // 5. Expense Breakdown by Category
+          if (expenseByType.isNotEmpty) ...[
+            _buildSectionHeader('Expense by Category (খরচ বিভাজন)', Icons.pie_chart_outline, Colors.blueGrey),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                children: expenseByType.entries.map((entry) {
+                  final pct = expense > 0 ? (entry.value / expense) * 100 : 0.0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            entry.key,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            '${pct.toStringAsFixed(1)}%',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            _money(entry.value),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+
+          // 6. Sales Breakdown DataTable
+          _buildSectionHeader('Sales Invoices (বিক্রয় বিবরণী)', Icons.receipt_long, Colors.blue),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: sales.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: Text(
+                        'এই ব্যাচে এখনো কোনো সেল রেকর্ড নেই',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowHeight: 40,
+                      dataRowHeight: 46,
+                      headingRowColor: MaterialStatePropertyAll<Color?>(Colors.blue.shade50),
+                      columns: const [
+                        DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Qty / Weight', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Total', style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: sales.map((item) {
+                        final qtyOrWt = item.type == 'Bird' && item.weightKg != null
+                            ? '${item.quantity} pcs (${item.weightKg!.toStringAsFixed(1)} kg)'
+                            : '${item.quantity}';
+                        final rate = '${item.unitPrice.toStringAsFixed(1)} tk';
+                        return DataRow(cells: [
+                          DataCell(Text(_date(item.date), style: const TextStyle(fontSize: 12))),
+                          DataCell(Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(item.type, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                          )),
+                          DataCell(Text(qtyOrWt, style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(rate, style: const TextStyle(fontSize: 12))),
+                          DataCell(Text(_money(item.totalAmount), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                        ]);
+                      }).toList(),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
