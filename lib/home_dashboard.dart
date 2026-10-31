@@ -1,3 +1,4 @@
+import "average_weight_screen.dart";
 import 'package:flutter/material.dart';
 import 'supabase_config.dart';
 import 'add_batch_screen.dart';
@@ -165,7 +166,7 @@ class HomeDashboardPage extends StatelessWidget {
                 color: Colors.deepPurple,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const WeeklyWeightScreenV2()),
+                  MaterialPageRoute(builder: (_) => const AverageWeightScreen()),
                 ),
               ),
             ]),
