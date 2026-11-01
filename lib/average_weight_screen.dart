@@ -817,7 +817,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B5E20),
                 foregroundColor: Colors.white,
-                shape: BorderRadius.circular(10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 1,
               ),
               onPressed: _isSaving ? null : _saveWeightEntry,
