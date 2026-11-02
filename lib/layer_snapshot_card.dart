@@ -4,7 +4,8 @@ import 'layer_performance_screen.dart';
 
 /// Small dashboard header card. Shows only when an Active Egg Production batch exists.
 class LayerSnapshotCard extends StatefulWidget {
-  const LayerSnapshotCard({super.key});
+  final VoidCallback? onTap;
+  const LayerSnapshotCard({super.key, this.onTap});
 
   @override
   State<LayerSnapshotCard> createState() => _LayerSnapshotCardState();
