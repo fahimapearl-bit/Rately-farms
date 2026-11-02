@@ -48,7 +48,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
 
       num lost = 0;
       for (final l in logs) {
-        lost += _n(l['mortality']) + _n(l['culled'] ?? l['culling']);
+        lost += _n(l['mortality_count'] ?? l['mortality']) + _n(l['culled'] ?? l['culling']);
       }
       final birds = (_n(batch['initial_birds']) - lost).toInt();
 

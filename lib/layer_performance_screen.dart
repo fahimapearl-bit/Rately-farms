@@ -40,7 +40,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
 
       final data = await _supabase
           .from('batches')
-          .select('id, batch_name, start_date, production_type, production_category, breed, status, initial_birds')
+          .select('id, name, start_date, production_type, production_category, breed, status, initial_birds')
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
 
@@ -591,7 +591,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                 value: _selectedBatch?['id']?.toString(),
                 hint: const Text('Select Batch', style: TextStyle(fontSize: 13)),
                 items: _batches.map((batch) {
-                  final name = batch['batch_name'] ?? 'Batch';
+                  final name = batch['name'] ?? 'Batch';
                   final cat = batch['production_category'] ?? '';
                   return DropdownMenuItem<String>(
                     value: batch['id'].toString(),
