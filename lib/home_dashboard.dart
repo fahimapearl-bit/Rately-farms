@@ -9,6 +9,7 @@ import 'expense_screen.dart';
 import 'cloud_lists_screen.dart';
 import 'cloud_summary_screens.dart';
 import 'management_screens.dart';
+import 'market_price_screen.dart';
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
@@ -202,7 +203,7 @@ class HomeDashboardPage extends StatelessWidget {
                 color: Colors.deepOrange,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const MarketPriceScreenV2()),
+                  MaterialPageRoute(builder: (_) => const MarketPriceScreen()),
                 ),
               ),
             ]),
