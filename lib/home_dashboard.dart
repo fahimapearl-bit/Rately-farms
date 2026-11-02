@@ -10,6 +10,8 @@ import 'cloud_lists_screen.dart';
 import 'cloud_summary_screens.dart';
 import 'management_screens.dart';
 import 'market_price_screen.dart';
+import 'layer_performance_screen.dart';
+import 'layer_snapshot_card.dart';
 
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
@@ -107,6 +109,14 @@ class HomeDashboardPage extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            LayerSnapshotCard(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LayerPerformanceScreen()),
               ),
             ),
             const SizedBox(height: 18),
@@ -230,6 +240,16 @@ class HomeDashboardPage extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CloudBatchSummaryPage()),
+                ),
+              ),
+              _DashboardItem(
+                title: 'Layer Performance',
+                subtitle: 'HDP and egg stats',
+                icon: Icons.egg_outlined,
+                color: Colors.amber.shade800,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LayerPerformanceScreen()),
                 ),
               ),
             ]),
