@@ -55,7 +55,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
       final data = await _supabase
           .from('batches')
-          .select('id, batch_name, start_date, production_type, production_category, breed, status')
+          .select('id, name, start_date, production_type, production_category, breed, status')
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
 
@@ -344,7 +344,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               fillColor: const Color(0xFFF9FAFB),
             ),
             items: _batches.map((b) {
-              final name = b['batch_name'] ?? 'Unnamed';
+              final name = b['name'] ?? 'Unnamed';
               final type = b['production_type'] ?? '';
               final breed = b['breed'] ?? '';
               final status = b['status'] ?? 'Active';
