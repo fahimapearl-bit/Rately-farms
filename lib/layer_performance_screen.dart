@@ -392,6 +392,46 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                                   return;
                                 }
 
+                                final totalEggs = goodEggs + damagedEggs;
+                                final activeBirds = _calculateActiveBirds();
+                                if (activeBirds > 0 && totalEggs > activeBirds) {
+                                  final proceed = await showDialog<bool>(
+                                    context: ctx,
+                                    barrierDismissible: false,
+                                    builder: (dCtx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      title: const Row(
+                                        children: [
+                                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                                          SizedBox(width: 8),
+                                          Text('Egg Count Warning'),
+                                        ],
+                                      ),
+                                      content: Text(
+                                        'Total eggs ($totalEggs) exceeds current live birds ($activeBirds).\n\n'
+                                        'Hen-Day Production will exceed 100%. Are you sure this entry is correct?',
+                                        style: const TextStyle(fontSize: 14, height: 1.4),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(dCtx, false),
+                                          child: const Text('Review Input', style: TextStyle(color: Colors.grey)),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.orange.shade700,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          ),
+                                          onPressed: () => Navigator.pop(dCtx, true),
+                                          child: const Text('Proceed Anyway'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (proceed != true) return;
+                                }
+
                                 Navigator.pop(ctx);
                                 await _saveLog(
                                   date: _dateFormat.format(selectedDate),
