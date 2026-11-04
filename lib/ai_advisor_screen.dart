@@ -220,6 +220,11 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+            tooltip: 'Open AI Window',
+            onPressed: () => _showAiAdviceModal(context, isLayer, breakEvenPerKg),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Sync Live Data',
             onPressed: _selectedBatchId != null
@@ -261,9 +266,17 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                         isLayer: isLayer,
                         breakEvenPerKg: breakEvenPerKg,
                       ),
+                      const SizedBox(height: 75), // spacing for FAB
                     ],
                   ),
                 ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAiAdviceModal(context, isLayer, breakEvenPerKg),
+        icon: const Icon(Icons.auto_awesome),
+        label: const Text('Open AI Window'),
+        backgroundColor: Colors.teal.shade700,
+        foregroundColor: Colors.white,
+      ),
     );
   }
 
@@ -288,7 +301,9 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       value: b['id'].toString(),
                       child: Text(
                         '${b['name'] ?? 'Batch'} (${b['production_type'] ?? 'General'})',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     );
                   }).toList(),
@@ -351,7 +366,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             Expanded(
               child: _buildMetricTile(
                 title: 'Total Expenses',
-                value: '৳ ${NumberFormat('#,##0').format(_totalExpenses)}',
+                value: 'TK ${NumberFormat('#,##0').format(_totalExpenses)}',
                 sub: 'Feed, Meds & Chicks',
                 icon: Icons.account_balance_wallet_outlined,
                 color: Colors.redAccent,
@@ -467,8 +482,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 ),
                 Text(
                   isLayer
-                      ? '৳ ${breakEvenPerEgg.toStringAsFixed(2)} / pc'
-                      : '৳ ${breakEvenPerKg.toStringAsFixed(2)} / kg',
+                      ? 'TK ${breakEvenPerEgg.toStringAsFixed(2)} / pc'
+                      : 'TK ${breakEvenPerKg.toStringAsFixed(2)} / kg',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -521,12 +536,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          isLayer ? 'Negotiating Price (৳/egg)' : 'Negotiating Price (৳/kg):',
+                          isLayer ? 'Negotiating Price (TK /egg)' : 'Negotiating Price (TK /kg):',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                       Text(
-                        'Admin: ৳ ${_adminDefaultPrice.toStringAsFixed(0)}',
+                        'Admin: TK ${_adminDefaultPrice.toStringAsFixed(0)}',
                         style: TextStyle(fontSize: 11, color: Colors.teal.shade700, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -537,7 +552,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       isDense: true,
-                      prefixText: '৳ ',
+                      prefixText: 'TK ',
                       hintText: 'Enter buyer offered price',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       fillColor: Colors.white,
@@ -590,13 +605,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           ),
                         ),
                         Text(
-                          'If sold today at ৳ ${_negotiatingPrice.toStringAsFixed(0)}/kg',
+                          'If sold today at TK ${_negotiatingPrice.toStringAsFixed(0)}/kg',
                           style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                         ),
                       ],
                     ),
                     Text(
-                      '${isProfit ? '+' : ''}৳ ${currencyFormat.format(runningProfitLoss)}',
+                      '${isProfit ? '+' : ''}TK ${currencyFormat.format(runningProfitLoss)}',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -612,11 +627,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     );
   }
 
-  Widget _buildManagementAdviceCard({
-    required bool isLayer,
-    required double breakEvenPerKg,
-  }) {
-    // Real-time actual based rule generation
+  List<String> _generateAdviceList(bool isLayer, double breakEvenPerKg) {
     final List<String> adviceList = [];
 
     // 1. Mortality check
@@ -633,7 +644,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         adviceList.add('⚖️ No weight record found recently. Log weight in "Average Weight" screen to get precise standing valuation.');
       } else if (_negotiatingPrice > 0 && _negotiatingPrice < breakEvenPerKg) {
         final gap = (breakEvenPerKg - _negotiatingPrice).toStringAsFixed(1);
-        adviceList.add('⚠️ Price Alert: Current negotiating price is ৳ $gap/kg below break-even! Consider holding or negotiating closer to ৳ ${breakEvenPerKg.toStringAsFixed(0)}/kg.');
+        adviceList.add('⚠️ Price Alert: Current negotiating price is TK $gap/kg below break-even! Consider holding or negotiating closer to TK ${breakEvenPerKg.toStringAsFixed(0)}/kg.');
       } else {
         adviceList.add('📈 Commercial Weight on track. Align feed withdrawal timing before final bird harvesting.');
       }
@@ -644,7 +655,111 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         adviceList.add('💡 Layer Care: Ensure adequate calcium grit supplementation during afternoon feeding to maintain shell thickness.');
       }
     }
+    return adviceList;
+  }
 
+  void _showAiAdviceModal(BuildContext context, bool isLayer, double breakEvenPerKg) {
+    final adviceList = _generateAdviceList(isLayer, breakEvenPerKg);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (_, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: ListView(
+                controller: scrollController,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.psychology, color: Colors.teal, size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'AI Batch Advisory Window',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Derived strictly from real-time database logs',
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 24),
+                  ...adviceList.map(
+                    (item) => Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontSize: 14, height: 1.4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close Window', style: TextStyle(fontSize: 15)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildManagementAdviceCard({
+    required bool isLayer,
+    required double breakEvenPerKg,
+  }) {
+    final List<String> adviceList = _generateAdviceList(isLayer, breakEvenPerKg);
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
