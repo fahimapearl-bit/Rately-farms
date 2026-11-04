@@ -50,8 +50,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     try {
       final res = await _supabase
           .from('batches')
-          .select('id, batch_name, production_type, start_date, initial_birds, status')
-          .eq('status', 'active')
+          .select('id, name, production_type, start_date, initial_birds, status')
+          .eq('status', 'Active')
           .order('start_date', ascending: false);
 
       _batches = List<Map<String, dynamic>>.from(res);
@@ -96,10 +96,11 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       if (isLayer) {
         final logsRes = await _supabase
             .from('layer_daily_logs')
-            .select('mortality_culling, total_eggs')
+            .select('mortality_count, culling_count, total_eggs')
             .eq('batch_id', batchId);
         for (var row in logsRes) {
-          mort += (row['mortality_culling'] as num?)?.toInt() ?? 0;
+          mort += ((row['mortality_count'] ?? 0) as num).toInt() +
+            ((row['culling_count'] ?? 0) as num).toInt();
           eggs += (row['total_eggs'] as num?)?.toInt() ?? 0;
         }
       } else {
