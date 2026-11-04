@@ -96,7 +96,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
           .select()
           .eq('batch_id', batchId)
           .order('log_date', ascending: false)
-          .limit(30);
+          ;
 
       if (mounted) {
         setState(() {
@@ -130,7 +130,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
       totalCulling += _getInt(log['culling_count']);
     }
     final remaining = initial - totalMortality - totalCulling;
-    return remaining > 0 ? remaining : initial;
+    return remaining > 0 ? remaining : 0;
   }
 
   // Open Bottom Sheet Form to Log Today's or Selected Date's Production
