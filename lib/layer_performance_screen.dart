@@ -400,7 +400,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                                     barrierDismissible: false,
                                     builder: (dCtx) => AlertDialog(
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                      title: const Row(
+                                      title: Row(
                                         children: [
                                           Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
                                           SizedBox(width: 8),
