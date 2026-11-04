@@ -200,6 +200,9 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
     // Meat / Broiler Metrics
     final double totalLiveWeightKg = _currentBirds * _latestAvgWeightKg;
+    final double breakEvenWeightKg = (_currentBirds > 0 && _negotiatingPrice > 0)
+        ? (_totalExpenses / (_currentBirds * _negotiatingPrice))
+        : 0.0;
     final double breakEvenPerKg = totalLiveWeightKg > 0
         ? (_totalExpenses / totalLiveWeightKg)
         : 0.0;
@@ -246,6 +249,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       _buildBreakEvenAndValuationCard(
                         isLayer: isLayer,
                         breakEvenPerKg: breakEvenPerKg,
+                        breakEvenWeightKg: breakEvenWeightKg,
                         breakEvenPerEgg: breakEvenPerEgg,
                         runningProfitLoss: runningProfitLoss,
                         currencyFormat: currencyFormat,
@@ -283,7 +287,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     return DropdownMenuItem<String>(
                       value: b['id'].toString(),
                       child: Text(
-                        '${b['batch_name']} (${b['production_type'] ?? 'General'})',
+                        '${b['name'] ?? 'Batch'} (${b['production_type'] ?? 'General'})',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     );
@@ -423,6 +427,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   Widget _buildBreakEvenAndValuationCard({
     required bool isLayer,
     required double breakEvenPerKg,
+    required double breakEvenWeightKg,
     required double breakEvenPerEgg,
     required double runningProfitLoss,
     required NumberFormat currencyFormat,
@@ -441,9 +446,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               children: [
                 const Icon(Icons.calculate_outlined, color: Colors.indigo),
                 const SizedBox(width: 8),
-                Text(
-                  isLayer ? 'Egg Break-Even & Financials' : 'Bird Break-Even & Running Valuation',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    isLayer ? 'Egg Break-Even & Financials' : 'Bird Break-Even & Valuation',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -469,9 +477,31 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 ),
               ],
             ),
+            if (!isLayer) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Break-Even Weight / Bird:',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    '${breakEvenWeightKg.toStringAsFixed(2)} kg / bird',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal.shade800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 6),
             Text(
-              'Minimum selling price needed to recover all recorded expenses.',
+              isLayer
+                  ? 'Minimum selling price needed to recover all recorded expenses.'
+                  : 'Target weight per bird needed to break even at current negotiating price.',
               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
@@ -489,12 +519,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        isLayer ? 'Negotiating Price (৳/egg)' : 'Negotiating Price (৳/kg):',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      Expanded(
+                        child: Text(
+                          isLayer ? 'Negotiating Price (৳/egg)' : 'Negotiating Price (৳/kg):',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
                       ),
                       Text(
-                        'Admin Rate: ৳ ${_adminDefaultPrice.toStringAsFixed(0)}',
+                        'Admin: ৳ ${_adminDefaultPrice.toStringAsFixed(0)}',
                         style: TextStyle(fontSize: 11, color: Colors.teal.shade700, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -625,9 +657,11 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               children: [
                 Icon(Icons.psychology, color: Colors.teal),
                 SizedBox(width: 8),
-                Text(
-                  'Batch Management Advice (Actuals)',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    'Batch Management Advice (Actuals)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
