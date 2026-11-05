@@ -1,3 +1,4 @@
+import 'ai_chat_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -222,7 +223,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           IconButton(
             icon: const Icon(Icons.auto_awesome, color: Colors.amber),
             tooltip: 'Open AI Window',
-            onPressed: () => _showAiAdviceModal(context, isLayer, breakEvenPerKg),
+            onPressed: () => _selectedBatchId == null ? null : Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(batchId: _selectedBatchId!, batchName: (_batches.firstWhere((b) => b['id'].toString() == _selectedBatchId, orElse: () => {'name': 'Batch'})['name'] ?? 'Batch').toString()))),
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -271,7 +272,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                   ),
                 ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAiAdviceModal(context, isLayer, breakEvenPerKg),
+        onPressed: () => _selectedBatchId == null ? null : Navigator.push(context, MaterialPageRoute(builder: (_) => AiChatScreen(batchId: _selectedBatchId!, batchName: (_batches.firstWhere((b) => b['id'].toString() == _selectedBatchId, orElse: () => {'name': 'Batch'})['name'] ?? 'Batch').toString()))),
         icon: const Icon(Icons.auto_awesome),
         label: const Text('Open AI Window'),
         backgroundColor: Colors.teal.shade700,
