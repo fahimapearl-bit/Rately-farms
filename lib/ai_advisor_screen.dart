@@ -40,6 +40,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   final TextEditingController _negotiatingPriceController = TextEditingController();
   double _negotiatingPrice = 0.0;
 
+  static const _ink = Color(0xFF102A1F);
+  static const _muted = Color(0xFF6B7280);
+  static const _line = Color(0xFFE5E9E6);
+  static const _soft = Color(0xFFF4F7F5);
+  static const _brand = Color(0xFF1B5E20);
+  static const _brandSoft = Color(0xFFE8F2E9);
+
   @override
   void initState() {
     super.initState();
@@ -57,7 +64,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     try {
       final res = await _supabase
           .from('batches')
-          .select('id, name, production_type, breed, shed, start_date, initial_birds, chick_price, status')
+          .select('id, name, production_type, breed, shed, start_date, initial_birds, additional_birds, chick_price, status')
           .eq('status', 'Active')
           .order('start_date', ascending: false);
 
@@ -72,7 +79,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading batches: $e')),
+          SnackBar(content: Text('Could not load batches: $e')),
         );
         setState(() => _isLoading = false);
       }
@@ -90,6 +97,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           .single();
       _selectedBatch = batchRes;
       _initialBirds = (batchRes['initial_birds'] as num?)?.toInt() ?? 0;
+      final additionalBirds = (batchRes['additional_birds'] as num?)?.toInt() ?? 0;
+      final placedBirds = _initialBirds + additionalBirds;
 
       // Age calculation
       DateTime? startDate;
@@ -175,7 +184,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       }
       _birdsSold = soldCount;
       _totalSales = sumSales;
-      _currentBirds = (_initialBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
+      _currentBirds = (placedBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
 
       // 4. Latest Average Weight (Meat & Layer)
       final weightRes = await _supabase
@@ -241,7 +250,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading metrics: $e')),
+          SnackBar(content: Text('Could not load batch metrics: $e')),
         );
         setState(() => _isLoading = false);
       }
@@ -281,9 +290,17 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     final batchName = (_selectedBatch?['name'] ?? 'Batch').toString();
 
     return Scaffold(
+      backgroundColor: _soft,
       appBar: AppBar(
-        title: const Text('AI & Batch Advisor'),
-        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: _ink,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'AI Advisor',
+          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.2),
+        ),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome, color: Colors.amber),
@@ -961,56 +978,135 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     );
   }
 
-  List<String> _generateAdviceList(bool isLayer, double breakEvenPerKg, double breakEvenPerEgg) {
-    final List<String> adviceList = [];
+  List<Map<String, String>> _generateAdviceList(
+    bool isLayer,
+    double breakEvenPerKg,
+    double breakEvenPerEgg,
+  ) {
+    final List<Map<String, String>> adviceList = [];
+    final placed = _initialBirds + ((_selectedBatch?['additional_birds'] as num?)?.toInt() ?? 0);
+    final mortRate = placed > 0 ? (_totalMortality * 100.0 / placed) : 0.0;
 
-    // 1. Mortality & Livability check
-    final double mortRate = _initialBirds > 0 ? (_totalMortality / _initialBirds) * 100 : 0.0;
-    if (mortRate > 4.5) {
-      adviceList.add('🚨 High Mortality (${mortRate.toStringAsFixed(1)}%): Inspect drinking water sanitation, ventilation, and review biosecurity strictly.');
+    if (mortRate >= 8) {
+      adviceList.add({
+        'level': 'urgent',
+        'title': 'High mortality',
+        'body':
+            'Mortality is ${mortRate.toStringAsFixed(1)}%. Check water sanitation, ventilation, and biosecurity immediately.',
+      });
+    } else if (mortRate >= 4) {
+      adviceList.add({
+        'level': 'watch',
+        'title': 'Mortality elevated',
+        'body':
+            'Mortality is ${mortRate.toStringAsFixed(1)}%. Review daily deaths and isolate weak birds.',
+      });
     } else {
-      adviceList.add('✅ Flock Livability is healthy (${(100 - mortRate).toStringAsFixed(1)}%). Continue strict feed hygiene and dry bedding.');
+      adviceList.add({
+        'level': 'good',
+        'title': 'Livability healthy',
+        'body':
+            'Survival is solid (${(100 - mortRate).toStringAsFixed(1)}%). Keep feed hygiene and dry litter.',
+      });
     }
 
-    // 2. Production Type specifics
     if (!isLayer) {
-      // Meat advice
-      if (_latestAvgWeightKg == 0.0) {
-        adviceList.add('⚖️ No weight log found. Log weekly weight in "Average Weight" screen to compute live biomass & break-even accurately.');
-      } else if (_negotiatingPrice > 0 && _negotiatingPrice < breakEvenPerKg) {
-        final gap = (breakEvenPerKg - _negotiatingPrice).toStringAsFixed(1);
-        adviceList.add('⚠️ Price Alert: Current negotiating price is TK $gap/kg below break-even! Consider holding or negotiating closer to TK ${breakEvenPerKg.toStringAsFixed(0)}/kg.');
+      if (_latestAvgWeightKg <= 0) {
+        adviceList.add({
+          'level': 'watch',
+          'title': 'No weight log',
+          'body':
+              'Log weekly weight in Average Weight so biomass and break-even stay accurate.',
+        });
+      } else if (_negotiatingPrice > 0 &&
+          breakEvenPerKg > 0 &&
+          _negotiatingPrice < breakEvenPerKg) {
+        final gap = (breakEvenPerKg - _negotiatingPrice).toStringAsFixed(0);
+        adviceList.add({
+          'level': 'urgent',
+          'title': 'Price below break-even',
+          'body':
+              'Negotiating price is about TK $gap/kg under break-even (TK ${breakEvenPerKg.toStringAsFixed(0)}/kg). Hold or renegotiate if possible.',
+        });
       } else {
-        adviceList.add('📈 Weight standard on target. Schedule feed withdrawal 6-8 hours before final bird catching to prevent carcass contamination.');
+        adviceList.add({
+          'level': 'good',
+          'title': 'Weight tracking OK',
+          'body':
+              'Keep feed consistent. Withdraw feed 6–8 hours before catch to protect carcass quality.',
+        });
       }
     } else {
-      // Layer advice (First laying age + laying onset)
       if (_firstLayingAgeDays != null) {
-        final double weeks = _firstLayingAgeDays! / 7.0;
-        if (weeks < 18.0) {
-          adviceList.add('⚠️ Early Laying Onset (${weeks.toStringAsFixed(1)} wks): Birds began laying early. Ensure adequate dietary calcium and body weight to avoid prolapse and small eggs.');
-        } else if (weeks <= 21.0) {
-          adviceList.add('🎯 Ideal First Laying Age (${weeks.toStringAsFixed(1)} wks): Flock started laying exactly within the optimal breed standard window (18-21 weeks).');
+        final weeks = _firstLayingAgeDays! / 7.0;
+        if (weeks < 18) {
+          adviceList.add({
+            'level': 'watch',
+            'title': 'Early laying onset',
+            'body':
+                'First eggs at ${weeks.toStringAsFixed(1)} weeks. Ensure calcium and body weight to reduce prolapse risk.',
+          });
+        } else if (weeks <= 21) {
+          adviceList.add({
+            'level': 'good',
+            'title': 'Ideal first lay age',
+            'body':
+                'Flock started laying at ${weeks.toStringAsFixed(1)} weeks — within the usual 18–21 week window.',
+          });
         } else {
-          adviceList.add('⏳ Delayed First Laying Age (${weeks.toStringAsFixed(1)} wks): Review uniformity of pullet body weight and artificial lighting step-up program.');
+          adviceList.add({
+            'level': 'watch',
+            'title': 'Delayed first lay',
+            'body':
+                'First eggs at ${weeks.toStringAsFixed(1)} weeks. Review pullet uniformity and lighting step-up.',
+          });
         }
       } else {
         final ageWeeks = _flockAgeDays / 7.0;
-        if (ageWeeks > 21.0) {
-          adviceList.add('⏳ Flock age is ${ageWeeks.toStringAsFixed(1)} weeks with no egg logs yet. Check light stimulation (14-16 hrs) and crude protein intake.');
+        if (ageWeeks >= 18) {
+          adviceList.add({
+            'level': 'watch',
+            'title': 'No egg logs yet',
+            'body':
+                'Flock is ${ageWeeks.toStringAsFixed(1)} weeks with no egg records. Check light (14–16 hrs) and protein intake.',
+          });
         } else {
-          adviceList.add('🐣 Pullet Rearing Phase (${ageWeeks.toStringAsFixed(1)} wks): Focus on target skeletal frame and weekly body weight gain before egg production starts.');
+          adviceList.add({
+            'level': 'good',
+            'title': 'Pullet rearing phase',
+            'body':
+                'Age ${ageWeeks.toStringAsFixed(1)} weeks. Focus on frame size and steady weekly weight gain before lay.',
+          });
         }
       }
 
-      if (_totalEggsCollected > 0 && _negotiatingPrice > 0) {
+      if (_negotiatingPrice > 0 && breakEvenPerEgg > 0) {
         if (_negotiatingPrice < breakEvenPerEgg) {
           final diff = (breakEvenPerEgg - _negotiatingPrice).toStringAsFixed(2);
-          adviceList.add('⚠️ Egg Price Margin: Current market rate is TK $diff/egg below cumulative break-even. As peak production continues, cumulative cost per egg will drop.');
+          adviceList.add({
+            'level': 'watch',
+            'title': 'Egg price margin',
+            'body':
+                'Market rate is about TK $diff/egg under cumulative break-even. Cost per egg usually falls as peak production continues.',
+          });
         } else {
-          adviceList.add('💡 Layer Care: Provide oyster shell grit / coarse limestone in late afternoon for optimal eggshell calcification during the night.');
+          adviceList.add({
+            'level': 'good',
+            'title': 'Shell quality care',
+            'body':
+                'Offer coarse limestone or oyster shell in late afternoon for overnight shell formation.',
+          });
         }
       }
+    }
+
+    if (_currentBirds <= 0) {
+      adviceList.insert(0, {
+        'level': 'urgent',
+        'title': 'No birds on hand',
+        'body':
+            'Current birds are zero after mortality and sales. Confirm records or close the batch.',
+      });
     }
 
     return adviceList;
@@ -1021,50 +1117,131 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required double breakEvenPerKg,
     required double breakEvenPerEgg,
   }) {
-    final List<String> adviceList = _generateAdviceList(isLayer, breakEvenPerKg, breakEvenPerEgg);
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.psychology, color: Colors.teal),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Batch Management Advice (Actuals)',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+    final adviceList =
+        _generateAdviceList(isLayer, breakEvenPerKg, breakEvenPerEgg);
+
+    Color bg(String level) {
+      switch (level) {
+        case 'urgent':
+          return const Color(0xFFFFEBEE);
+        case 'watch':
+          return const Color(0xFFFFF8E8);
+        default:
+          return _brandSoft;
+      }
+    }
+
+    Color fg(String level) {
+      switch (level) {
+        case 'urgent':
+          return const Color(0xFFB71C1C);
+        case 'watch':
+          return const Color(0xFF8A6A1A);
+        default:
+          return _brand;
+      }
+    }
+
+    IconData icon(String level) {
+      switch (level) {
+        case 'urgent':
+          return Icons.error_outline;
+        case 'watch':
+          return Icons.visibility_outlined;
+        default:
+          return Icons.check_circle_outline;
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.psychology_outlined, color: _brand, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Management advice',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                    letterSpacing: -0.2,
                   ),
                 ),
-              ],
-            ),
-            const Divider(height: 18),
-            ...adviceList.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Expanded(
-                      child: Text(
-                        item,
-                        style: const TextStyle(fontSize: 13, height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Based on recorded batch data only.',
+            style: TextStyle(fontSize: 12, color: _muted),
+          ),
+          const SizedBox(height: 14),
+          ...adviceList.map((item) {
+            final level = item['level'] ?? 'good';
+            return Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: bg(level),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon(level), size: 20, color: fg(level)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item['title'] ?? '',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: fg(level),
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          item['body'] ?? '',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.35,
+                            color: fg(level).withOpacity(0.9),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
+
 }
 
 extension ColorUtils on Color {
