@@ -1,4 +1,3 @@
-import 'app_colors.dart';
 import 'ai_chat_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -40,6 +39,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   double _adminDefaultPrice = 0.0;
   final TextEditingController _negotiatingPriceController = TextEditingController();
   double _negotiatingPrice = 0.0;
+
+  static const _ink = Color(0xFF102A1F);
+  static const _muted = Color(0xFF6B7280);
+  static const _line = Color(0xFFE5E9E6);
+  static const _soft = Color(0xFFF4F7F5);
+  static const _brand = Color(0xFF1B5E20);
+  static const _brandSoft = Color(0xFFE8F2E9);
 
   @override
   void initState() {
@@ -83,6 +89,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   Future<void> _fetchBatchActualMetrics(String batchId) async {
     setState(() => _isLoading = true);
     try {
+      // 1. Batch info
       final batchRes = await _supabase
           .from('batches')
           .select()
@@ -93,6 +100,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       final additionalBirds = (batchRes['additional_birds'] as num?)?.toInt() ?? 0;
       final placedBirds = _initialBirds + additionalBirds;
 
+      // Age calculation
       DateTime? startDate;
       if (batchRes['start_date'] != null) {
         startDate = DateTime.tryParse(batchRes['start_date'].toString());
@@ -108,6 +116,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           .toLowerCase()
           .contains('egg');
 
+      // 2. Mortality, Eggs & First Laying Date
       int mort = 0;
       int eggs = 0;
       int latestEggs = 0;
@@ -128,6 +137,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           eggs += rowEggs;
           latestEggs = rowEggs;
 
+          // First Laying Date detection
           if (firstEggDate == null && rowEggs > 0 && row['log_date'] != null) {
             firstEggDate = DateTime.tryParse(row['log_date'].toString());
             if (firstEggDate != null && startDate != null) {
@@ -151,6 +161,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       _firstLayingDate = firstEggDate;
       _firstLayingAgeDays = firstEggAgeDays;
 
+      // 3. Sales (revenue + sold birds count)
       final salesRes = await _supabase
           .from('sales')
           .select('sale_type, quantity, weight_kg, unit_price')
@@ -175,6 +186,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       _totalSales = sumSales;
       _currentBirds = (placedBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
 
+      // 4. Latest Average Weight (Meat & Layer)
       final weightRes = await _supabase
           .from('weekly_weights')
           .select('average_weight_kg, weight_date')
@@ -192,6 +204,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         _latestWeightDate = null;
       }
 
+      // 5. Total Expenses (chick cost + expenses)
       final expRes = await _supabase
           .from('expenses')
           .select('amount')
@@ -208,6 +221,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       }
       _totalExpenses = sumExp;
 
+      // 6. Admin Default Market Price
       final marketRes = await _supabase
           .from('market_prices')
           .select('price_per_unit, item_name')
@@ -245,7 +259,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final currencyFormat = NumberFormat('#,##0.0', 'en_US');
 
     final isLayer = (_selectedBatch?['production_type'] ?? '')
@@ -255,6 +268,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
     final double netUnrecovered = (_totalExpenses - _totalSales).clamp(0.0, double.infinity);
 
+    // Meat / Broiler Metrics
     final double totalLiveWeightKg = _currentBirds * _latestAvgWeightKg;
     final double breakEvenWeightKg = (_currentBirds > 0 && _negotiatingPrice > 0)
         ? (netUnrecovered / (_currentBirds * _negotiatingPrice))
@@ -265,6 +279,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     final double meatValuation = totalLiveWeightKg * _negotiatingPrice;
     final double meatRunningProfitLoss = meatValuation - netUnrecovered;
 
+    // Layer Metrics
     final double breakEvenPerEgg = _totalEggsCollected > 0
         ? (_totalExpenses / _totalEggsCollected)
         : 0.0;
@@ -275,20 +290,17 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     final batchName = (_selectedBatch?['name'] ?? 'Batch').toString();
 
     return Scaffold(
-      backgroundColor: colors.soft,
+      backgroundColor: _soft,
       appBar: AppBar(
-        backgroundColor: colors.card,
-        foregroundColor: colors.ink,
+        backgroundColor: Colors.white,
+        foregroundColor: _ink,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        title: Text(
+        title: const Text(
           'AI Advisor',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-            color: colors.ink,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.2),
         ),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome, color: Colors.amber),
@@ -306,7 +318,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     ),
           ),
           IconButton(
-            icon: Icon(Icons.refresh, color: colors.ink),
+            icon: const Icon(Icons.refresh),
             tooltip: 'Sync Live Data',
             onPressed: _selectedBatchId != null
                 ? () => _fetchBatchActualMetrics(_selectedBatchId!)
@@ -315,25 +327,27 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: colors.brand))
+          ? const Center(child: CircularProgressIndicator())
           : _batches.isEmpty
-              ? Center(
-                  child: Text(
-                    'No active batches found.',
-                    style: TextStyle(color: colors.muted),
-                  ),
-                )
+              ? const Center(child: Text('No active batches found.'))
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildBatchProfileCard(isLayer, colors),
+                      // 1. Batch Selection & Profile Header Card
+                      _buildBatchProfileCard(isLayer),
                       const SizedBox(height: 14),
+
+                      // 2. AI Quick Chat Consultation Banner
                       _buildAiConsultationBanner(batchName, isLayer),
                       const SizedBox(height: 16),
-                      _buildActualsGrid(isLayer, totalLiveWeightKg, colors),
+
+                      // 3. Real-time Actuals Bento Grid
+                      _buildActualsGrid(isLayer, totalLiveWeightKg),
                       const SizedBox(height: 16),
+
+                      // 4. Financials & Break-Even Card
                       _buildBreakEvenAndValuationCard(
                         isLayer: isLayer,
                         breakEvenPerKg: breakEvenPerKg,
@@ -343,16 +357,16 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                         eggRunningMargin: eggRunningMargin,
                         dailyEggRevenue: dailyEggRevenue,
                         currencyFormat: currencyFormat,
-                        colors: colors,
                       ),
                       const SizedBox(height: 16),
+
+                      // 5. Real-Time DB Management Advice Card
                       _buildManagementAdviceCard(
                         isLayer: isLayer,
                         breakEvenPerKg: breakEvenPerKg,
                         breakEvenPerEgg: breakEvenPerEgg,
-                        colors: colors,
                       ),
-                      const SizedBox(height: 80),
+                      const SizedBox(height: 80), // spacing for FAB
                     ],
                   ),
                 ),
@@ -370,13 +384,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 ),
         icon: const Icon(Icons.auto_awesome),
         label: const Text('Open AI Window'),
-        backgroundColor: colors.brand,
-        foregroundColor: colors.onBrand,
+        backgroundColor: Colors.teal.shade700,
+        foregroundColor: Colors.white,
       ),
     );
   }
 
-  Widget _buildBatchProfileCard(bool isLayer, AppColors colors) {
+  Widget _buildBatchProfileCard(bool isLayer) {
     final breed = _selectedBatch?['breed']?.toString();
     final shed = _selectedBatch?['shed']?.toString();
     final startDateStr = _selectedBatch?['start_date']?.toString();
@@ -384,12 +398,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     final ageDaysRem = _flockAgeDays % 7;
 
     return Card(
-      elevation: colors.isDark ? 0 : 1,
-      color: colors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: colors.line),
-      ),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -399,14 +409,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isLayer
-                        ? (colors.isDark ? Colors.amber.withOpacity(0.15) : Colors.amber.shade50)
-                        : colors.brandSoft,
+                    color: isLayer ? Colors.amber.shade50 : Colors.teal.shade50,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     isLayer ? Icons.egg : Icons.analytics_outlined,
-                    color: isLayer ? Colors.amber : colors.brand,
+                    color: isLayer ? Colors.amber.shade800 : Colors.teal,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -414,24 +422,19 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedBatchId,
-                      dropdownColor: colors.card,
                       isExpanded: true,
-                      hint: Text('Select Batch', style: TextStyle(color: colors.muted)),
+                      hint: const Text('Select Batch'),
                       items: _batches.map((b) {
                         return DropdownMenuItem<String>(
                           value: b['id'].toString(),
                           child: Text(
                             '${b['name'] ?? 'Batch'} (${b['production_type'] ?? 'General'})',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: colors.ink,
-                            ),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                           ),
                         );
-                      }).toList>,
+                      }).toList(),
                       onChanged: (val) {
                         if (val != null && val != _selectedBatchId) {
                           setState(() => _selectedBatchId = val);
@@ -443,7 +446,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 ),
               ],
             ),
-            Divider(height: 18, color: colors.line),
+            const Divider(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -453,32 +456,28 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       ? '$ageWeeks wks $ageDaysRem d'
                       : 'Day $_flockAgeDays ($ageWeeks wks)',
                   icon: Icons.calendar_today_outlined,
-                  color: Colors.indigoAccent,
-                  colors: colors,
+                  color: Colors.indigo,
                 ),
                 if (breed != null && breed.isNotEmpty)
                   _buildProfileBadge(
                     label: 'Breed',
                     value: breed,
                     icon: Icons.category_outlined,
-                    color: colors.isDark ? Colors.amber.shade300 : Colors.brown,
-                    colors: colors,
+                    color: Colors.brown,
                   ),
                 if (shed != null && shed.isNotEmpty)
                   _buildProfileBadge(
                     label: 'Shed',
                     value: shed,
                     icon: Icons.warehouse_outlined,
-                    color: colors.isDark ? Colors.tealAccent : Colors.blueGrey,
-                    colors: colors,
+                    color: Colors.blueGrey,
                   ),
                 if (startDateStr != null)
                   _buildProfileBadge(
                     label: 'Started',
                     value: DateFormat('dd MMM').format(DateTime.parse(startDateStr)),
                     icon: Icons.event,
-                    color: colors.muted,
-                    colors: colors,
+                    color: Colors.grey.shade700,
                   ),
               ],
             ),
@@ -493,7 +492,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required String value,
     required IconData icon,
     required Color color,
-    required AppColors colors,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,7 +502,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             const SizedBox(width: 3),
             Text(
               label,
-              style: TextStyle(fontSize: 10, color: colors.muted),
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
             ),
           ],
         ),
@@ -526,14 +524,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.teal.shade900, Colors.teal.shade700],
+          colors: [Colors.teal.shade800, Colors.teal.shade600],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.teal.withOpacity(0.2),
+            color: Colors.teal.withOpacity(0.25),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -592,10 +590,11 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     );
   }
 
-  Widget _buildActualsGrid(bool isLayer, double totalLiveWeightKg, AppColors colors) {
+  Widget _buildActualsGrid(bool isLayer, double totalLiveWeightKg) {
     final currency = NumberFormat('#,##0');
     final mortPercent = _initialBirds > 0 ? ((_totalMortality / _initialBirds) * 100) : 0.0;
 
+    // Layer first egg string
     String firstEggText;
     String firstEggSub;
     if (_firstLayingAgeDays != null && _firstLayingDate != null) {
@@ -610,9 +609,9 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Real-time Farm Actuals',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: colors.ink),
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Row(
@@ -625,7 +624,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     (_birdsSold > 0 ? ' | Sold: $_birdsSold' : ''),
                 icon: Icons.pets,
                 color: Colors.blue,
-                colors: colors,
               ),
             ),
             const SizedBox(width: 10),
@@ -636,8 +634,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       value: firstEggText,
                       sub: firstEggSub,
                       icon: Icons.egg,
-                      color: Colors.amber,
-                      colors: colors,
+                      color: Colors.amber.shade800,
                     )
                   : _buildMetricTile(
                       title: 'Avg Weight',
@@ -647,7 +644,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           : 'No weight logged',
                       icon: Icons.scale_outlined,
                       color: Colors.orange,
-                      colors: colors,
                     ),
             ),
           ],
@@ -661,8 +657,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 value: 'TK ${currency.format(_totalExpenses)}',
                 sub: 'Sales: TK ${currency.format(_totalSales)} | Net: TK ${currency.format(_totalExpenses - _totalSales)}',
                 icon: Icons.account_balance_wallet_outlined,
-                color: Colors.indigoAccent,
-                colors: colors,
+                color: Colors.indigo,
               ),
             ),
             const SizedBox(width: 10),
@@ -676,7 +671,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           : 'Actual logged',
                       icon: Icons.bar_chart_outlined,
                       color: Colors.teal,
-                      colors: colors,
                     )
                   : _buildMetricTile(
                       title: 'Standing Biomass',
@@ -684,7 +678,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       sub: '$_currentBirds live birds',
                       icon: Icons.fitness_center,
                       color: Colors.teal,
-                      colors: colors,
                     ),
             ),
           ],
@@ -699,14 +692,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required String sub,
     required IconData icon,
     required Color color,
-    required AppColors colors,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.isDark ? color.withOpacity(0.12) : color.withOpacity(0.08),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(colors.isDark ? 0.35 : 0.2)),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,11 +710,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.muted,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -734,13 +722,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: colors.isDark ? color : color.darker(),
+              color: color.darker(),
             ),
           ),
           const SizedBox(height: 2),
           Text(
             sub,
-            style: TextStyle(fontSize: 11, color: colors.muted),
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -758,18 +746,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required double eggRunningMargin,
     required double dailyEggRevenue,
     required NumberFormat currencyFormat,
-    required AppColors colors,
   }) {
     final bool isMeatProfit = meatRunningProfitLoss >= 0;
     final bool isEggSurplus = eggRunningMargin >= 0;
 
     return Card(
-      elevation: colors.isDark ? 0 : 2,
-      color: colors.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: colors.line),
-      ),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -777,38 +760,35 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.calculate_outlined, color: colors.brand),
+                const Icon(Icons.calculate_outlined, color: Colors.indigo),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     isLayer ? 'Egg Break-Even & Financials' : 'Bird Break-Even & Valuation',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: colors.ink,
-                    ),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
-            Divider(height: 20, color: colors.line),
+            const Divider(height: 20),
 
+            // Break-Even Metric Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   isLayer ? 'Break-Even Cost / Egg:' : 'Break-Even Cost / Kg:',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.ink),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   isLayer
                       ? 'TK ${breakEvenPerEgg.toStringAsFixed(2)} / pc'
                       : 'TK ${breakEvenPerKg.toStringAsFixed(2)} / kg',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: colors.brand,
+                    color: Colors.indigo,
                   ),
                 ),
               ],
@@ -819,16 +799,16 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  const Text(
                     'Break-Even Weight / Bird:',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.ink),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     '${breakEvenWeightKg.toStringAsFixed(2)} kg / bird',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: colors.isDark ? Colors.tealAccent : Colors.teal.shade800,
+                      color: Colors.teal.shade800,
                     ),
                   ),
                 ],
@@ -840,7 +820,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               isLayer
                   ? 'Total expenses divided by collected eggs to date.'
                   : 'Target weight per bird needed to break even at current negotiating price.',
-              style: TextStyle(fontSize: 11, color: colors.muted),
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
 
@@ -848,9 +828,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors.soft,
+                color: Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: colors.line),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,14 +840,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       Expanded(
                         child: Text(
                           isLayer ? 'Negotiating Price (TK /egg):' : 'Negotiating Price (TK /kg):',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.ink),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                       Text(
                         'Admin: TK ${_adminDefaultPrice.toStringAsFixed(isLayer ? 1 : 0)}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: colors.brand,
+                          color: Colors.teal.shade700,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -878,29 +857,15 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                   TextField(
                     controller: _negotiatingPriceController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: TextStyle(color: colors.ink),
                     decoration: InputDecoration(
                       isDense: true,
                       prefixText: 'TK ',
-                      prefixStyle: TextStyle(color: colors.muted),
                       hintText: 'Enter buyer offered rate',
-                      hintStyle: TextStyle(color: colors.hint),
-                      fillColor: colors.card,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      fillColor: Colors.white,
                       filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colors.line),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colors.line),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colors.brand, width: 1.5),
-                      ),
                       suffixIcon: IconButton(
-                        icon: Icon(Icons.restore, size: 18, color: colors.muted),
+                        icon: const Icon(Icons.restore, size: 18),
                         tooltip: 'Reset to Admin Rate',
                         onPressed: () {
                           setState(() {
@@ -927,14 +892,10 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isMeatProfit
-                      ? (colors.isDark ? Colors.green.withOpacity(0.18) : Colors.green.shade50)
-                      : (colors.isDark ? Colors.red.withOpacity(0.18) : Colors.red.shade50),
+                  color: isMeatProfit ? Colors.green.shade50 : Colors.red.shade50,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isMeatProfit
-                        ? (colors.isDark ? Colors.green.withOpacity(0.4) : Colors.green.shade300)
-                        : (colors.isDark ? Colors.red.withOpacity(0.4) : Colors.red.shade300),
+                    color: isMeatProfit ? Colors.green.shade300 : Colors.red.shade300,
                   ),
                 ),
                 child: Row(
@@ -948,14 +909,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isMeatProfit
-                                ? (colors.isDark ? Colors.greenAccent : Colors.green.shade900)
-                                : (colors.isDark ? const Color(0xFFFF8A80) : Colors.red.shade900),
+                            color: isMeatProfit ? Colors.green.shade900 : Colors.red.shade900,
                           ),
                         ),
                         Text(
                           'If sold today at TK ${_negotiatingPrice.toStringAsFixed(0)}/kg',
-                          style: TextStyle(fontSize: 11, color: colors.muted),
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                         ),
                       ],
                     ),
@@ -964,9 +923,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: isMeatProfit
-                            ? (colors.isDark ? Colors.greenAccent : Colors.green.shade800)
-                            : (colors.isDark ? const Color(0xFFFF8A80) : Colors.red.shade800),
+                        color: isMeatProfit ? Colors.green.shade800 : Colors.red.shade800,
                       ),
                     ),
                   ],
@@ -976,14 +933,10 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isEggSurplus
-                      ? (colors.isDark ? Colors.green.withOpacity(0.18) : Colors.green.shade50)
-                      : (colors.isDark ? Colors.blue.withOpacity(0.18) : Colors.blue.shade50),
+                  color: isEggSurplus ? Colors.green.shade50 : Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isEggSurplus
-                        ? (colors.isDark ? Colors.green.withOpacity(0.4) : Colors.green.shade300)
-                        : (colors.isDark ? Colors.blue.withOpacity(0.4) : Colors.blue.shade300),
+                    color: isEggSurplus ? Colors.green.shade300 : Colors.blue.shade300,
                   ),
                 ),
                 child: Row(
@@ -997,16 +950,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isEggSurplus
-                                ? (colors.isDark ? Colors.greenAccent : Colors.green.shade900)
-                                : (colors.isDark ? Colors.lightBlueAccent : Colors.blue.shade900),
+                            color: isEggSurplus ? Colors.green.shade900 : Colors.blue.shade900,
                           ),
                         ),
                         Text(
                           _latestDailyEggs > 0
                               ? 'Today\'s egg value: TK ${dailyEggRevenue.toStringAsFixed(0)}'
                               : 'Total eggs × TK ${_negotiatingPrice.toStringAsFixed(1)}/egg',
-                          style: TextStyle(fontSize: 11, color: colors.muted),
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                         ),
                       ],
                     ),
@@ -1015,9 +966,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: isEggSurplus
-                            ? (colors.isDark ? Colors.greenAccent : Colors.green.shade800)
-                            : (colors.isDark ? Colors.lightBlueAccent : Colors.indigo.shade800),
+                        color: isEggSurplus ? Colors.green.shade800 : Colors.indigo.shade800,
                       ),
                     ),
                   ],
@@ -1167,7 +1116,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required bool isLayer,
     required double breakEvenPerKg,
     required double breakEvenPerEgg,
-    required AppColors colors,
   }) {
     final adviceList =
         _generateAdviceList(isLayer, breakEvenPerKg, breakEvenPerEgg);
@@ -1175,22 +1123,22 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     Color bg(String level) {
       switch (level) {
         case 'urgent':
-          return colors.isDark ? const Color(0xFF381517) : const Color(0xFFFFEBEE);
+          return const Color(0xFFFFEBEE);
         case 'watch':
-          return colors.noticeBg;
+          return const Color(0xFFFFF8E8);
         default:
-          return colors.brandSoft;
+          return _brandSoft;
       }
     }
 
     Color fg(String level) {
       switch (level) {
         case 'urgent':
-          return colors.isDark ? const Color(0xFFFF8A80) : const Color(0xFFB71C1C);
+          return const Color(0xFFB71C1C);
         case 'watch':
-          return colors.noticeText;
+          return const Color(0xFF8A6A1A);
         default:
-          return colors.brand;
+          return _brand;
       }
     }
 
@@ -1209,32 +1157,31 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
-        color: colors.card,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.line),
+        border: Border.all(color: _line),
         boxShadow: [
-          if (!colors.isDark)
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Icon(Icons.psychology_outlined, color: colors.brand, size: 22),
-              const SizedBox(width: 8),
+              Icon(Icons.psychology_outlined, color: _brand, size: 22),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Management advice',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: colors.ink,
+                    color: _ink,
                     letterSpacing: -0.2,
                   ),
                 ),
@@ -1242,9 +1189,9 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
+          const Text(
             'Based on recorded batch data only.',
-            style: TextStyle(fontSize: 12, color: colors.muted),
+            style: TextStyle(fontSize: 12, color: _muted),
           ),
           const SizedBox(height: 14),
           ...adviceList.map((item) {
@@ -1256,9 +1203,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               decoration: BoxDecoration(
                 color: bg(level),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: fg(level).withOpacity(colors.isDark ? 0.3 : 0.15),
-                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1297,6 +1241,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       ),
     );
   }
+
 }
 
 extension ColorUtils on Color {
