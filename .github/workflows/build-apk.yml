@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - revert-to-apk42
 
 jobs:
   build-apk:
