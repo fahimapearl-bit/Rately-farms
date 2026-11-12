@@ -1,4 +1,5 @@
 import 'ai_chat_screen.dart';
+import 'poultry_standards.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -26,6 +27,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   int _flockAgeDays = 0;
   double _latestAvgWeightKg = 0.0;
   DateTime? _latestWeightDate;
+  double _totalFeedKg = 0.0;
   double _totalExpenses = 0.0;
   double _totalSales = 0.0;
 
@@ -89,6 +91,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   Future<void> _fetchBatchActualMetrics(String batchId) async {
     setState(() => _isLoading = true);
     try {
+      _totalFeedKg = 0.0;
       // 1. Batch info
       final batchRes = await _supabase
           .from('batches')
@@ -118,6 +121,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
       // 2. Mortality, Eggs & First Laying Date
       int mort = 0;
+      double feedSum = 0.0;
       int eggs = 0;
       int latestEggs = 0;
       DateTime? firstEggDate;
@@ -148,13 +152,26 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       } else {
         final dailyRes = await _supabase
             .from('daily_records')
-            .select('mortality')
+            .select('mortality, feed_kg')
             .eq('batch_id', batchId);
         for (var row in dailyRes) {
           mort += (row['mortality'] as num?)?.toInt() ?? 0;
+          feedSum += (row['feed_kg'] as num?)?.toDouble() ?? 0.0;
         }
       }
 
+      // Feed total for FCR (layers may also log feed in daily_records)
+      if (isLayer) {
+        final feedRes = await _supabase
+            .from('daily_records')
+            .select('feed_kg')
+            .eq('batch_id', batchId);
+        for (var row in feedRes) {
+          feedSum += (row['feed_kg'] as num?)?.toDouble() ?? 0.0;
+        }
+      }
+
+      _totalFeedKg = feedSum;
       _totalMortality = mort;
       _totalEggsCollected = eggs;
       _latestDailyEggs = latestEggs;
@@ -345,6 +362,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
                       // 3. Real-time Actuals Bento Grid
                       _buildActualsGrid(isLayer, totalLiveWeightKg),
+                      const SizedBox(height: 16),
+
+                      _buildFcrCard(totalLiveWeightKg),
+                      const SizedBox(height: 16),
+
+                      _buildStandardCompareCard(),
                       const SizedBox(height: 16),
 
                       // 4. Financials & Break-Even Card
@@ -1010,6 +1033,40 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       });
     }
 
+    final liveBiomass = _currentBirds * _latestAvgWeightKg;
+    final fcr = (_totalFeedKg > 0 && liveBiomass > 0) ? _totalFeedKg / liveBiomass : null;
+    if (fcr != null) {
+      if (fcr > 1.85) {
+        adviceList.add({
+          'level': 'urgent',
+          'title': 'High FCR',
+          'body':
+              'FCR is ${fcr.toStringAsFixed(2)}. Review feed wastage, disease pressure, and ration quality.',
+        });
+      } else if (fcr > 1.55) {
+        adviceList.add({
+          'level': 'watch',
+          'title': 'FCR watch',
+          'body':
+              'FCR is ${fcr.toStringAsFixed(2)}. Acceptable, but tighten feeding routine if possible.',
+        });
+      } else {
+        adviceList.add({
+          'level': 'good',
+          'title': 'Strong FCR',
+          'body':
+              'FCR is ${fcr.toStringAsFixed(2)}. Feed conversion is efficient.',
+        });
+      }
+    } else if (_totalFeedKg <= 0) {
+      adviceList.add({
+        'level': 'watch',
+        'title': 'Feed not logged',
+        'body':
+            'Add daily feed (kg) so FCR can guide ration decisions.',
+      });
+    }
+
     if (!isLayer) {
       if (_latestAvgWeightKg <= 0) {
         adviceList.add({
@@ -1110,6 +1167,346 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     }
 
     return adviceList;
+  }
+
+  Widget _buildFcrCard(double totalLiveWeightKg) {
+    final hasFeed = _totalFeedKg > 0;
+    final hasBiomass = totalLiveWeightKg > 0;
+    final fcr = (hasFeed && hasBiomass) ? (_totalFeedKg / totalLiveWeightKg) : null;
+
+    String status;
+    Color statusColor;
+    String detail;
+    if (fcr == null) {
+      status = 'Unavailable';
+      statusColor = _muted;
+      detail = !hasFeed
+          ? 'Log daily feed (kg) to calculate FCR.'
+          : 'Log average weight to calculate live biomass and FCR.';
+    } else if (fcr <= 1.55) {
+      status = 'Excellent';
+      statusColor = const Color(0xFF2E7D32);
+      detail = 'Feed is converting efficiently into body weight.';
+    } else if (fcr <= 1.85) {
+      status = 'Acceptable';
+      statusColor = const Color(0xFF1565C0);
+      detail = 'FCR is within a workable farm range. Watch wastage.';
+    } else {
+      status = 'High';
+      statusColor = const Color(0xFFC62828);
+      detail = 'Feed use is high vs biomass. Check spillage, disease, and feed quality.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _brandSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.speed, color: _brand, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Feed conversion (FCR)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Total feed ÷ live biomass',
+                      style: TextStyle(fontSize: 12, color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            fcr == null ? '—' : fcr.toStringAsFixed(2),
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              color: fcr == null ? _muted : _ink,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: _soft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _miniStat('Feed', '${_totalFeedKg.toStringAsFixed(0)} kg'),
+                ),
+                Container(width: 1, height: 28, color: _line),
+                Expanded(
+                  child: _miniStat(
+                    'Biomass',
+                    hasBiomass ? '${totalLiveWeightKg.toStringAsFixed(0)} kg' : '—',
+                  ),
+                ),
+                Container(width: 1, height: 28, color: _line),
+                Expanded(
+                  child: _miniStat('Birds', '$_currentBirds'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(detail, style: const TextStyle(fontSize: 13, height: 1.35, color: _muted)),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: _muted, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _ink),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStandardCompareCard() {
+    final category = (_selectedBatch?['production_category'] ?? '').toString();
+    final breed = (_selectedBatch?['breed'] ?? '').toString();
+    final productionType = (_selectedBatch?['production_type'] ?? '').toString();
+    final hasWeight = _latestAvgWeightKg > 0;
+
+    final evaluation = PoultryStandardsService.evaluate(
+      productionType: productionType,
+      productionCategory: category,
+      breed: breed,
+      ageDays: _flockAgeDays,
+      actualWeightKg: hasWeight ? _latestAvgWeightKg : 0,
+    );
+
+    final standardKg = evaluation.targetWeightGrams / 1000.0;
+    final hasStandard = evaluation.targetWeightGrams > 0;
+    final statusColor = Color(evaluation.colorHex);
+
+    String statusLabel;
+    switch (evaluation.status) {
+      case GrowthStatus.ahead:
+        statusLabel = 'Ahead';
+        break;
+      case GrowthStatus.behind:
+        statusLabel = 'Behind';
+        break;
+      case GrowthStatus.onTarget:
+        statusLabel = 'On target';
+        break;
+    }
+
+    final pctText = !hasWeight || !hasStandard
+        ? '—'
+        : '${evaluation.diffPercent >= 0 ? '+' : ''}${evaluation.diffPercent.toStringAsFixed(1)}%';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _line),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.monitor_weight_outlined, color: statusColor, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Standard vs actual',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Day $_flockAgeDays · ${evaluation.breedBenchmarkName}',
+                      style: const TextStyle(fontSize: 12, color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  hasWeight && hasStandard ? statusLabel : 'No data',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: hasWeight && hasStandard ? statusColor : _muted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _compareBox(
+                  label: 'Standard',
+                  value: hasStandard ? '${standardKg.toStringAsFixed(2)} kg' : '—',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _compareBox(
+                  label: 'Actual',
+                  value: hasWeight ? '${_latestAvgWeightKg.toStringAsFixed(2)} kg' : '—',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _compareBox(
+                  label: 'Gap',
+                  value: pctText,
+                  valueColor: hasWeight && hasStandard ? statusColor : _ink,
+                ),
+              ),
+            ],
+          ),
+          if (hasWeight && hasStandard) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: (standardKg <= 0)
+                    ? 0
+                    : (_latestAvgWeightKg / standardKg).clamp(0.0, 1.3) / 1.3,
+                backgroundColor: _soft,
+                color: statusColor,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            !hasWeight
+                ? 'Log average weight to compare against the breed curve.'
+                : !hasStandard
+                    ? 'No standard curve matched this breed/category.'
+                    : evaluation.advice,
+            style: const TextStyle(fontSize: 13, height: 1.35, color: _muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _compareBox({
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: _soft,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: _muted, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: valueColor ?? _ink,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildManagementAdviceCard({
