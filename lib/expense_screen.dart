@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 class ExpenseScreenNew extends StatefulWidget {
   const ExpenseScreenNew({super.key});
   @override
@@ -49,9 +51,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   }
 
   void _msg(String t, {bool error = false}) {
+    final colors = context.colors;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t), backgroundColor: error ? Colors.red : Colors.green));
+        content: Text(t), backgroundColor: error ? colors.error : colors.brand));
   }
 
   Future<void> _loadBatches() async {
@@ -162,6 +165,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -291,10 +295,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   key: ValueKey(e['id']),
                   direction: DismissDirection.endToStart,
                   background: Container(
-                    color: Colors.red,
+                    color: colors.error,
                     alignment: Alignment.centerRight,
                     padding: const EdgeInsets.only(right: 16),
-                    child: const Icon(Icons.delete, color: Colors.white),
+                    child: Icon(Icons.delete, color: colors.card),
                   ),
                   confirmDismiss: (_) => _delete(e),
                   child: ListTile(

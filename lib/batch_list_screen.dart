@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 class BatchListScreenNew extends StatefulWidget {
   const BatchListScreenNew({super.key});
 
@@ -38,8 +40,9 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
       });
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load batches: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to load batches: $e'), backgroundColor: colors.error),
         );
       }
     } finally {
@@ -59,23 +62,26 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
       await loadBatches();
 
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(newStatus == 'Closed' ? 'Batch closed ($closeType)' : 'Batch re-opened'),
-            backgroundColor: Colors.green,
+            backgroundColor: colors.brand,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to update status: $e'), backgroundColor: colors.error),
         );
       }
     }
   }
 
   Future<void> confirmCloseBatch(Map<String, dynamic> batch) async {
+    final colors = context.colors;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -85,7 +91,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade800),
+            style: FilledButton.styleFrom(backgroundColor: colors.warning),
             child: const Text('Confirm Close'),
           ),
         ],
@@ -98,6 +104,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
   }
 
   Future<void> deleteBatch(Map<String, dynamic> batch) async {
+    final colors = context.colors;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -107,7 +114,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: colors.error),
             child: const Text('Delete'),
           ),
         ],
@@ -120,8 +127,9 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
         setState(() => batches.removeWhere((b) => b['id'] == batch['id']));
       } catch (e) {
         if (mounted) {
+          final colors = context.colors;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red),
+            SnackBar(content: Text('Delete failed: $e'), backgroundColor: colors.error),
           );
         }
       }
@@ -140,21 +148,22 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
   Widget _buildStatusChip(Map<String, dynamic> batch) {
     final status = (batch['status'] ?? 'Active').toString();
     final closeType = (batch['close_type'] ?? '').toString();
+    final colors = context.colors;
 
     if (status == 'Active') {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.green.shade50,
+          color: colors.successSoft,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.green.shade400),
+          border: Border.all(color: colors.brand),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 14, color: Colors.green.shade700),
+            Icon(Icons.check_circle, size: 14, color: colors.brand),
             const SizedBox(width: 4),
-            Text('Active', style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
+            Text('Active', style: TextStyle(color: colors.brand, fontWeight: FontWeight.bold, fontSize: 12)),
           ],
         ),
       );
@@ -163,18 +172,18 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isAuto ? Colors.grey.shade100 : Colors.orange.shade50,
+          color: isAuto ? colors.surfaceAlt : colors.warningSoft,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isAuto ? Colors.grey.shade400 : Colors.orange.shade400),
+          border: Border.all(color: isAuto ? colors.hint : colors.warning),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(isAuto ? Icons.auto_mode : Icons.lock_clock, size: 14, color: isAuto ? Colors.grey.shade700 : Colors.orange.shade800),
+            Icon(isAuto ? Icons.auto_mode : Icons.lock_clock, size: 14, color: isAuto ? colors.inkAlt : colors.warning),
             const SizedBox(width: 4),
             Text(
               isAuto ? 'Auto Closed' : 'Manual Closed',
-              style: TextStyle(color: isAuto ? Colors.grey.shade800 : Colors.orange.shade900, fontWeight: FontWeight.bold, fontSize: 12),
+              style: TextStyle(color: isAuto ? colors.ink : colors.warning, fontWeight: FontWeight.bold, fontSize: 12),
             ),
           ],
         ),
@@ -184,6 +193,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Batch List'),
@@ -246,26 +256,26 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                   Text('Breed: ${batch['breed'] ?? '-'} | Birds: ${batch['initial_birds'] ?? 0}'),
                                   Text('Started: ${batch['start_date'] ?? '-'}'),
                                   if (!isActive && batch['closed_date'] != null)
-                                    Text('Closed: ${batch['closed_date']}', style: const TextStyle(color: Colors.grey)),
+                                    Text('Closed: ${batch['closed_date']}', style: TextStyle(color: colors.muted)),
                                   const Divider(height: 16),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       if (isActive)
                                         OutlinedButton.icon(
-                                          icon: const Icon(Icons.check_box_outlined, size: 16, color: Colors.orange),
-                                          label: const Text('Close Batch', style: TextStyle(color: Colors.orange)),
+                                          icon: Icon(Icons.check_box_outlined, size: 16, color: colors.warning),
+                                          label: Text('Close Batch', style: TextStyle(color: colors.warning)),
                                           onPressed: () => confirmCloseBatch(batch),
                                         )
                                       else
                                         OutlinedButton.icon(
-                                          icon: const Icon(Icons.replay, size: 16, color: Colors.green),
-                                          label: const Text('Re-open', style: TextStyle(color: Colors.green)),
+                                          icon: Icon(Icons.replay, size: 16, color: colors.brand),
+                                          label: Text('Re-open', style: TextStyle(color: colors.brand)),
                                           onPressed: () => updateBatchStatus(batch['id'].toString(), 'Active'),
                                         ),
                                       const SizedBox(width: 8),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                        icon: Icon(Icons.delete_outline, color: colors.error),
                                         onPressed: () => deleteBatch(batch),
                                       ),
                                     ],

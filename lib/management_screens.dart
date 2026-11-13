@@ -8,6 +8,8 @@ import 'supabase_repository.dart';
 import 'models.dart';
 import 'supabase_error_handler.dart';
 
+import 'app_colors.dart';
+
 String _dateText(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
@@ -131,6 +133,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(title: const Text('Expenses')),
       body: batches.isEmpty
@@ -202,7 +205,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
               if (expenses.isNotEmpty)
                 Card(
                   margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  color: Colors.green.shade100,
+                  color: colors.brandSoft,
                   child: ListTile(
                     leading: const Icon(Icons.account_balance_wallet),
                     title: const Text('Total expense'),
@@ -223,7 +226,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
                               headingRowColor: MaterialStatePropertyAll(
-                                Colors.green.shade100,
+                                colors.brandSoft,
                               ),
                               columns: const [
                                 DataColumn(label: Text('Date')),
@@ -241,7 +244,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
                                     DataCell(Text('${item.amount.toStringAsFixed(2)} tk')),
                                     DataCell(IconButton(
                                       tooltip: 'Delete',
-                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      icon: Icon(Icons.delete_outline, color: colors.error),
                                       onPressed: () => _delete(item),
                                     )),
                                   ])).toList(),
@@ -324,6 +327,7 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(title: const Text('Weekly Average Weight')),
       body: batches.isEmpty
@@ -388,7 +392,7 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
                               headingRowColor: MaterialStatePropertyAll(
-                                Colors.green.shade100,
+                                colors.brandSoft,
                               ),
                               columns: const [
                                 DataColumn(label: Text('Date')),
@@ -489,6 +493,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(title: const Text('Market Price')),
       body: Column(children: [
@@ -560,7 +565,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         headingRowColor: MaterialStatePropertyAll(
-                          Colors.green.shade100,
+                          colors.brandSoft,
                         ),
                         columns: const [
                           DataColumn(label: Text('Date')),
@@ -580,7 +585,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
                               DataCell(Text('${item.price.toStringAsFixed(2)} tk/${item.unit}')),
                               DataCell(IconButton(
                                 tooltip: 'Delete',
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                icon: Icon(Icons.delete_outline, color: colors.error),
                                 onPressed: () => _delete(item),
                               )),
                             ])).toList(),

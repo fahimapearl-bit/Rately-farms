@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 class MarketPriceScreen extends StatefulWidget {
   const MarketPriceScreen({super.key});
 
@@ -102,10 +104,11 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: colors.surfaceAlt,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -114,12 +117,12 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             ),
             Text(
               'Official Daily Benchmark Rates',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+              style: TextStyle(fontSize: 12, color: colors.onAccentMuted),
             ),
           ],
         ),
-        backgroundColor: Colors.deepOrange.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor: colors.warning,
+        foregroundColor: colors.card,
         elevation: 0,
         actions: [
           IconButton(
@@ -134,8 +137,9 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
   }
 
   Widget _buildBody() {
+    final colors = context.colors;
     if (_isLoading && _allPrices.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Colors.deepOrange));
+      return Center(child: CircularProgressIndicator(color: colors.warning));
     }
 
     if (_errorMessage != null && _allPrices.isEmpty) {
@@ -145,12 +149,12 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              Icon(Icons.error_outline, size: 48, color: colors.error),
               const SizedBox(height: 12),
               Text(
                 'Failed to load rates\n$_errorMessage',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: colors.muted),
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -158,8 +162,8 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try Again'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepOrange,
-                  foregroundColor: Colors.white,
+                  backgroundColor: colors.warning,
+                  foregroundColor: colors.card,
                 ),
               ),
             ],
@@ -169,7 +173,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     }
 
     return RefreshIndicator(
-      color: Colors.deepOrange,
+      color: colors.warning,
       onRefresh: _fetchMarketPrices,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -179,18 +183,18 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.amber.shade50,
+              color: colors.warningSoft,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.amber.shade300),
+              border: Border.all(color: colors.warningBorder),
             ),
             child: Row(
               children: [
-                Icon(Icons.campaign_outlined, color: Colors.amber.shade900, size: 22),
+                Icon(Icons.campaign_outlined, color: colors.warning, size: 22),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Rates are published by Central Admin based on wholesale market trends.',
-                    style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w500),
+                    style: TextStyle(fontSize: 12, color: colors.warning, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
@@ -199,9 +203,9 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
           const SizedBox(height: 16),
 
           // Bento Section: Live Snapshot
-          const Text(
+          Text(
             'TODAY\'S BENCHMARK RATES',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 0.8),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.inkAlt, letterSpacing: 0.8),
           ),
           const SizedBox(height: 10),
 
@@ -209,7 +213,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             categoryKey: 'broiler',
             defaultTitle: 'Broiler Chicken (Live)',
             icon: Icons.egg_alt_outlined,
-            accentColor: Colors.deepOrange,
+            accentColor: colors.warning,
           ),
           const SizedBox(height: 10),
 
@@ -217,7 +221,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             categoryKey: 'sonali',
             defaultTitle: 'Sonali Chicken (Live)',
             icon: Icons.pets_outlined,
-            accentColor: Colors.amber.shade800,
+            accentColor: colors.warning,
           ),
           const SizedBox(height: 10),
 
@@ -225,7 +229,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             categoryKey: 'desi',
             defaultTitle: 'Desi Chicken (Live)',
             icon: Icons.grass_outlined,
-            accentColor: Colors.teal.shade700,
+            accentColor: colors.accent,
           ),
           const SizedBox(height: 10),
 
@@ -233,23 +237,23 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             categoryKey: 'table_egg',
             defaultTitle: 'Red Table Egg',
             icon: Icons.egg_outlined,
-            accentColor: Colors.brown.shade600,
+            accentColor: colors.warning,
           ),
 
           const SizedBox(height: 24),
 
           // Section 2: Recent Broadcast History
-          const Text(
+          Text(
             'RECENT BROADCAST BULLETINS',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey, letterSpacing: 0.8),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.inkAlt, letterSpacing: 0.8),
           ),
           const SizedBox(height: 10),
 
           if (_allPrices.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text('No broadcast history available.', style: TextStyle(color: Colors.grey)),
+                child: Text('No broadcast history available.', style: TextStyle(color: colors.muted)),
               ),
             )
           else
@@ -267,6 +271,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     required IconData icon,
     required Color accentColor,
   }) {
+    final colors = context.colors;
     final row = _latestByCategory[categoryKey];
     final hasData = row != null;
     final price = hasData ? _toDouble(row['price_per_unit']) : 0.0;
@@ -278,12 +283,12 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: colors.shadow,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -307,23 +312,23 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               children: [
                 Text(
                   itemName,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colors.inkAlt),
                 ),
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    Icon(Icons.location_on_outlined, size: 12, color: Colors.grey.shade600),
+                    Icon(Icons.location_on_outlined, size: 12, color: colors.muted),
                     const SizedBox(width: 3),
                     Text(
                       location,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 11, color: colors.muted),
                     ),
                     const SizedBox(width: 8),
-                    Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey.shade600),
+                    Icon(Icons.calendar_today_outlined, size: 11, color: colors.muted),
                     const SizedBox(width: 3),
                     Text(
                       dateStr,
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 11, color: colors.muted),
                     ),
                   ],
                 ),
@@ -343,7 +348,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               ),
               Text(
                 'per $unit',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 11, color: colors.muted),
               ),
               if (change != null) ...[
                 const SizedBox(height: 2),
@@ -357,48 +362,50 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
   }
 
   Widget _buildTrendBadge(double diff) {
+    final colors = context.colors;
     if (diff > 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
         decoration: BoxDecoration(
-          color: Colors.green.shade50,
+          color: colors.successSoft,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.green.shade300),
+          border: Border.all(color: colors.brandSoft),
         ),
         child: Text(
           '▲ +৳${diff.toStringAsFixed(1)}',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.brand),
         ),
       );
     } else if (diff < 0) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
+          color: colors.errorSoft,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.red.shade300),
+          border: Border.all(color: colors.errorBorder),
         ),
         child: Text(
           '▼ -৳${diff.abs().toStringAsFixed(1)}',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.red.shade700),
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.error),
         ),
       );
     } else {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+          color: colors.surfaceAlt,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           '― Stable',
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+          style: TextStyle(fontSize: 10, color: colors.inkAlt),
         ),
       );
     }
   }
 
   Widget _buildHistoryCard(Map<String, dynamic> row) {
+    final colors = context.colors;
     final price = _toDouble(row['price_per_unit']);
     final unit = row['unit'] ?? 'kg';
     final itemName = row['item_name'] ?? 'Market Rate';
@@ -409,10 +416,10 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
-      color: Colors.white,
+      color: colors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: colors.line),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -430,7 +437,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
                 ),
                 Text(
                   '৳ ${price.toStringAsFixed(unit == 'piece' ? 2 : 0)} / $unit',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.deepOrange),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colors.warning),
                 ),
               ],
             ),
@@ -439,14 +446,14 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               children: [
                 Text(
                   dateStr,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 11, color: colors.muted),
                 ),
                 const SizedBox(width: 8),
-                Text('•', style: TextStyle(color: Colors.grey.shade400)),
+                Text('•', style: TextStyle(color: colors.hint)),
                 const SizedBox(width: 8),
                 Text(
                   location,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 11, color: colors.muted),
                 ),
               ],
             ),
@@ -454,7 +461,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               const SizedBox(height: 4),
               Text(
                 'Note: $notes',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.blueGrey.shade700),
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: colors.inkAlt),
               ),
             ],
           ],

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'models.dart' as cloud;
 import 'supabase_repository.dart';
 
+import 'app_colors.dart';
+
 class _SummaryData {
   final List<cloud.Batch> batches;
   final List<cloud.DailyRecord> records;
@@ -70,13 +72,14 @@ class _ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 42),
+            Icon(Icons.error_outline, color: colors.error, size: 42),
             const SizedBox(height: 12),
             Text('Summary load হয়নি: $message', textAlign: TextAlign.center),
             const SizedBox(height: 12),
@@ -114,6 +117,7 @@ class _BentoKpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -152,7 +156,7 @@ class _BentoKpiCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             title,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade700),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.inkAlt),
           ),
           const SizedBox(height: 4),
           FittedBox(
@@ -160,7 +164,7 @@ class _BentoKpiCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               value,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey.shade900),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.ink),
             ),
           ),
         ],
@@ -304,6 +308,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
   }
 
   Widget _buildBody(_SummaryData current) {
+    final colors = context.colors;
     final records = current.records.where((item) => inRange(item.date)).toList();
     final expenses = current.expenses.where((item) => inRange(item.date)).toList();
     final sales = current.sales.where((item) => inRange(item.date)).toList();
@@ -355,7 +360,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.calendar_month_outlined, size: 20, color: Colors.green.shade800),
+                          Icon(Icons.calendar_month_outlined, size: 20, color: colors.brand),
                           const SizedBox(width: 8),
                           Text(
                             'Select Date Range',
@@ -368,16 +373,16 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade50,
+                          color: colors.successSoft,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.shade200),
+                          border: Border.all(color: colors.brandSoft),
                         ),
                         child: Text(
                           '$durationDays Days',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
+                            color: colors.brand,
                           ),
                         ),
                       ),
@@ -414,9 +419,9 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                           ),
                         ),
                       ),
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.symmetric(horizontal: 6),
-                        child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
+                        child: Icon(Icons.arrow_forward, size: 16, color: colors.muted),
                       ),
                       Expanded(
                         child: OutlinedButton.icon(
@@ -452,7 +457,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
               ),
               Text(
                 '${records.length} logs recorded',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: colors.muted),
               ),
             ],
           ),
@@ -467,8 +472,8 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                   value: '${feed.toStringAsFixed(1)} kg',
                   subtitle: 'Daily Feed',
                   icon: Icons.grain_outlined,
-                  iconColor: Colors.amber.shade800,
-                  bgColor: const Color(0xFFFFFBEB),
+                  iconColor: colors.warning,
+                  bgColor: colors.warningSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -478,8 +483,8 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                   value: '${water.toStringAsFixed(1)} L',
                   subtitle: 'Intake',
                   icon: Icons.water_drop_outlined,
-                  iconColor: Colors.blue.shade700,
-                  bgColor: const Color(0xFFEFF6FF),
+                  iconColor: colors.info,
+                  bgColor: colors.infoSoft,
                 ),
               ),
             ],
@@ -493,8 +498,8 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                   value: '$eggs pcs',
                   subtitle: 'Production',
                   icon: Icons.egg_outlined,
-                  iconColor: Colors.purple.shade700,
-                  bgColor: const Color(0xFFFAF5FF),
+                  iconColor: colors.purple,
+                  bgColor: colors.purpleSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -504,8 +509,8 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                   value: '$mortality birds',
                   subtitle: 'Loss',
                   icon: Icons.warning_amber_rounded,
-                  iconColor: Colors.red.shade700,
-                  bgColor: const Color(0xFFFEF2F2),
+                  iconColor: colors.error,
+                  bgColor: colors.errorSoft,
                 ),
               ),
             ],
@@ -528,13 +533,13 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: colors.surfaceAlt,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: colors.line),
                 ),
-                child: const Text(
+                child: Text(
                   'Cash basis',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.ink),
                 ),
               ),
             ],
@@ -548,9 +553,9 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
+                    color: colors.successSoft,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.green.shade200),
+                    border: Border.all(color: colors.brandSoft),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,33 +563,33 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.point_of_sale_outlined, color: Colors.green.shade800, size: 20),
+                          Icon(Icons.point_of_sale_outlined, color: colors.brand, size: 20),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.green.shade100,
+                              color: colors.brandSoft,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               'Inflow',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.brand),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Text('Total Sales', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      Text('Total Sales', style: TextStyle(fontSize: 12, color: colors.inkAlt)),
                       const SizedBox(height: 4),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
                           _money(income),
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade900),
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.brand),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text('${sales.length} transactions', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                      Text('${sales.length} transactions', style: TextStyle(fontSize: 11, color: colors.muted)),
                     ],
                   ),
                 ),
@@ -594,9 +599,9 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
+                    color: colors.warningSoft,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.orange.shade200),
+                    border: Border.all(color: colors.warningBorder),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,33 +609,33 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.receipt_long_outlined, color: Colors.orange.shade800, size: 20),
+                          Icon(Icons.receipt_long_outlined, color: colors.warning, size: 20),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.orange.shade100,
+                              color: colors.warningSoft,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               'Outflow',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.warning),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Text('Total Expenses', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      Text('Total Expenses', style: TextStyle(fontSize: 12, color: colors.inkAlt)),
                       const SizedBox(height: 4),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
                           _money(expense),
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.warning),
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text('${expenses.length} entries', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                      Text('${expenses.length} entries', style: TextStyle(fontSize: 11, color: colors.muted)),
                     ],
                   ),
                 ),
@@ -644,10 +649,10 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: cashFlow >= 0 ? const Color(0xFFF7FEE7) : const Color(0xFFFEF3C7),
+              color: cashFlow >= 0 ? colors.successSoft : colors.warningSoft,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: cashFlow >= 0 ? Colors.lightGreen.shade300 : Colors.amber.shade300,
+                color: cashFlow >= 0 ? colors.brandSoft : colors.warningBorder,
               ),
             ),
             child: Row(
@@ -655,12 +660,12 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: cashFlow >= 0 ? Colors.lightGreen.shade100 : Colors.amber.shade100,
+                    color: cashFlow >= 0 ? colors.brandSoft : colors.warningSoft,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     cashFlow >= 0 ? Icons.trending_up : Icons.trending_down,
-                    color: cashFlow >= 0 ? Colors.green.shade800 : Colors.amber.shade900,
+                    color: cashFlow >= 0 ? colors.brand : colors.warning,
                     size: 22,
                   ),
                 ),
@@ -674,7 +679,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: cashFlow >= 0 ? Colors.green.shade900 : Colors.amber.shade900,
+                          color: cashFlow >= 0 ? colors.brand : colors.warning,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -683,13 +688,13 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: cashFlow >= 0 ? Colors.green.shade900 : Colors.amber.shade900,
+                          color: cashFlow >= 0 ? colors.brand : colors.warning,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Excludes unsold birds valuation. Cash receipts minus payments.',
-                        style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                        style: TextStyle(fontSize: 10, color: colors.inkAlt),
                       ),
                     ],
                   ),
@@ -705,7 +710,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: Colors.grey.shade200),
+              side: BorderSide(color: colors.line),
             ),
             child: Padding(
               padding: const EdgeInsets.all(14),
@@ -714,7 +719,7 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
                 children: [
                   Text(
                     'Revenue Sources Breakdown',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: colors.ink),
                   ),
                   const SizedBox(height: 6),
                   _summaryRow('Bird Sales', _money(birdIncome)),
@@ -745,11 +750,12 @@ class _CloudDateRangeSummaryPageState extends State<CloudDateRangeSummaryPage> {
   }
 
   Widget _quickChip(String label, VoidCallback onTap) {
+    final colors = context.colors;
     return ActionChip(
       label: Text(label, style: const TextStyle(fontSize: 11)),
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      backgroundColor: Colors.grey.shade100,
-      side: BorderSide(color: Colors.grey.shade300),
+      backgroundColor: colors.surfaceAlt,
+      side: BorderSide(color: colors.line),
       onPressed: onTap,
     );
   }
@@ -777,6 +783,7 @@ class _DateRangeBatchTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final rows = batches.map((batch) {
       final batchRecords = records.where((item) => item.batchId == batch.id);
       final batchExpenses = expenses.where((item) => item.batchId == batch.id);
@@ -804,7 +811,7 @@ class _DateRangeBatchTable extends StatelessWidget {
             _money(cashFlow),
             style: TextStyle(
               fontWeight: FontWeight.bold,
-              color: cashFlow >= 0 ? Colors.green.shade800 : Colors.red.shade800,
+              color: cashFlow >= 0 ? colors.brand : colors.error,
             ),
           ),
         ),
@@ -815,7 +822,7 @@ class _DateRangeBatchTable extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: colors.line),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -831,7 +838,7 @@ class _DateRangeBatchTable extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               'Activity recorded between ${_date(fromDate)} and ${_date(toDate)}',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 11, color: colors.muted),
             ),
             const SizedBox(height: 12),
             if (rows.isEmpty)
@@ -845,7 +852,7 @@ class _DateRangeBatchTable extends StatelessWidget {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: MaterialStatePropertyAll<Color?>(Colors.green.shade50),
+                  headingRowColor: MaterialStatePropertyAll<Color?>(colors.successSoft),
                   dataRowMinHeight: 38,
                   dataRowMaxHeight: 44,
                   columns: const [
@@ -955,9 +962,10 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final current = data;
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: colors.surfaceAlt,
       appBar: AppBar(
         title: const Text('Batch-wise Summary'),
         actions: [
@@ -979,7 +987,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+                            Icon(Icons.inventory_2_outlined, size: 48, color: colors.hint),
                             const SizedBox(height: 12),
                             const Text(
                               'কোনো ব্যাচ পাওয়া যায়নি',
@@ -996,6 +1004,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
   }
 
   Widget _buildBody(_SummaryData current) {
+    final colors = context.colors;
     final batch = current.batches.firstWhere((item) => item.id == selectedBatchId);
     final records = current.records.where((item) => item.batchId == batch.id).toList();
     final expenses = current.expenses.where((item) => item.batchId == batch.id).toList();
@@ -1045,12 +1054,12 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: colors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: colors.line),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: colors.shadow,
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -1086,19 +1095,19 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   children: [
                     _batchBadge(
                       '${batch.productionType} • ${batch.productionCategory.isEmpty ? "General" : batch.productionCategory}',
-                      Colors.teal.shade700,
+                      colors.accent,
                     ),
                     _batchBadge(
                       batch.breed.isEmpty ? 'Mixed Breed' : batch.breed,
-                      Colors.indigo.shade700,
+                      colors.info,
                     ),
                     _batchBadge(
                       '${_runningDays(batch.startDate)} Days Running',
-                      Colors.orange.shade800,
+                      colors.warning,
                     ),
                     _batchBadge(
                       'Start: ${_date(batch.startDate)}',
-                      Colors.blueGrey.shade700,
+                      colors.inkAlt,
                     ),
                   ],
                 ),
@@ -1107,7 +1116,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
           ),
 
           // 2. Flock Dynamics (Bento KPI 2x2)
-          _buildSectionHeader('Flock Dynamics (পাখির স্থিতি)', Icons.pets, Colors.teal),
+          _buildSectionHeader('Flock Dynamics (পাখির স্থিতি)', Icons.pets, colors.accent),
           Row(
             children: [
               Expanded(
@@ -1116,8 +1125,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: '$currentBirds',
                   subtitle: '${survivalPct.toStringAsFixed(1)}% alive',
                   icon: Icons.favorite,
-                  iconColor: const Color(0xFF059669),
-                  bgColor: const Color(0xFFECFDF5),
+                  iconColor: colors.accent,
+                  bgColor: colors.successSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1127,8 +1136,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: '${batch.initialBirds}',
                   subtitle: 'Start flock',
                   icon: Icons.inventory_2_outlined,
-                  iconColor: Colors.blue.shade700,
-                  bgColor: Colors.blue.shade50,
+                  iconColor: colors.info,
+                  bgColor: colors.infoSoft,
                 ),
               ),
             ],
@@ -1142,8 +1151,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: '$mortality',
                   subtitle: '${mortalityPct.toStringAsFixed(1)}% loss',
                   icon: Icons.warning_amber_rounded,
-                  iconColor: Colors.red.shade700,
-                  bgColor: Colors.red.shade50,
+                  iconColor: colors.error,
+                  bgColor: colors.errorSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1153,15 +1162,15 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: '$birdsSold',
                   subtitle: '${soldPct.toStringAsFixed(1)}% sold',
                   icon: Icons.shopping_cart_checkout,
-                  iconColor: Colors.purple.shade700,
-                  bgColor: Colors.purple.shade50,
+                  iconColor: colors.purple,
+                  bgColor: colors.purpleSoft,
                 ),
               ),
             ],
           ),
 
           // 3. Feed & Production Bento Grid (2x2)
-          _buildSectionHeader('Feed & Production (খাদ্য ও ওজন)', Icons.restaurant, Colors.amber.shade800),
+          _buildSectionHeader('Feed & Production (খাদ্য ও ওজন)', Icons.restaurant, colors.warning),
           Row(
             children: [
               Expanded(
@@ -1172,8 +1181,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                       ? '${(feed / batch.initialBirds).toStringAsFixed(2)} kg/bird'
                       : null,
                   icon: Icons.grain,
-                  iconColor: Colors.amber.shade800,
-                  bgColor: Colors.amber.shade50,
+                  iconColor: colors.warning,
+                  bgColor: colors.warningSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1183,8 +1192,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: '${water.toStringAsFixed(0)} L',
                   subtitle: feed > 0 ? '${(water / feed).toStringAsFixed(1)} L/kg feed' : null,
                   icon: Icons.water_drop,
-                  iconColor: Colors.cyan.shade700,
-                  bgColor: Colors.cyan.shade50,
+                  iconColor: colors.info,
+                  bgColor: colors.infoSoft,
                 ),
               ),
             ],
@@ -1202,8 +1211,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           ? '${weights.length} weigh-ins'
                           : 'No weigh-ins',
                   icon: Icons.scale,
-                  iconColor: Colors.indigo.shade700,
-                  bgColor: Colors.indigo.shade50,
+                  iconColor: colors.info,
+                  bgColor: colors.infoSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1214,23 +1223,23 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                         value: '$eggs',
                         subtitle: '${records.length} logs',
                         icon: Icons.egg_outlined,
-                        iconColor: Colors.orange.shade800,
-                        bgColor: Colors.orange.shade50,
+                        iconColor: colors.warning,
+                        bgColor: colors.warningSoft,
                       )
                     : _BentoKpiCard(
                         title: 'Daily Logs',
                         value: '${records.length}',
                         subtitle: 'Log entries',
                         icon: Icons.assignment_turned_in_outlined,
-                        iconColor: Colors.teal.shade700,
-                        bgColor: Colors.teal.shade50,
+                        iconColor: colors.accent,
+                        bgColor: colors.accentSoft,
                       ),
               ),
             ],
           ),
 
           // 4. Financial Snapshot & Standing Flock Asset
-          _buildSectionHeader('Financial Snapshot (আর্থিক স্থিতি)', Icons.account_balance_wallet, Colors.green.shade800),
+          _buildSectionHeader('Financial Snapshot (আর্থিক স্থিতি)', Icons.account_balance_wallet, colors.brand),
           Row(
             children: [
               Expanded(
@@ -1239,8 +1248,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: _money(income),
                   subtitle: '${sales.length} invoices',
                   icon: Icons.trending_up,
-                  iconColor: Colors.green.shade700,
-                  bgColor: Colors.green.shade50,
+                  iconColor: colors.brand,
+                  bgColor: colors.successSoft,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1250,8 +1259,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                   value: _money(expense),
                   subtitle: '${expenses.length} entries',
                   icon: Icons.trending_down,
-                  iconColor: Colors.red.shade700,
-                  bgColor: Colors.red.shade50,
+                  iconColor: colors.error,
+                  bgColor: colors.errorSoft,
                 ),
               ),
             ],
@@ -1262,14 +1271,14 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isSurplus ? const Color(0xFFF0FDF4) : const Color(0xFFFFFBEB),
+              color: isSurplus ? colors.successSoft : colors.warningSoft,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSurplus ? Colors.green.shade300 : Colors.amber.shade300,
+                color: isSurplus ? colors.brandSoft : colors.warningBorder,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: colors.shadow,
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -1289,7 +1298,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isSurplus ? Colors.green.shade800 : Colors.amber.shade900,
+                            color: isSurplus ? colors.brand : colors.warning,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1298,7 +1307,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: isSurplus ? Colors.green.shade900 : Colors.amber.shade900,
+                            color: isSurplus ? colors.brand : colors.warning,
                           ),
                         ),
                       ],
@@ -1307,13 +1316,13 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: isSurplus
-                            ? Colors.green.withOpacity(0.15)
-                            : Colors.amber.withOpacity(0.2),
+                            ? colors.brand.withOpacity(0.15)
+                            : colors.warning.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isSurplus ? Icons.check_circle_outline : Icons.schedule,
-                        color: isSurplus ? Colors.green.shade800 : Colors.amber.shade900,
+                        color: isSurplus ? colors.brand : colors.warning,
                         size: 24,
                       ),
                     ),
@@ -1324,12 +1333,12 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Divider(
                       height: 1,
-                      color: (isSurplus ? Colors.green : Colors.amber).shade200,
+                      color: isSurplus ? colors.brandSoft : colors.warningSoft,
                     ),
                   ),
                   Row(
                     children: [
-                      Icon(Icons.inventory_2, size: 16, color: Colors.blueGrey.shade700),
+                      Icon(Icons.inventory_2, size: 16, color: colors.inkAlt),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -1337,7 +1346,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Colors.blueGrey.shade900,
+                            color: colors.inkAlt,
                           ),
                         ),
                       ),
@@ -1350,13 +1359,13 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
 
           // 5. Expense Breakdown by Category
           if (expenseByType.isNotEmpty) ...[
-            _buildSectionHeader('Expense by Category (খরচ বিভাজন)', Icons.pie_chart_outline, Colors.blueGrey),
+            _buildSectionHeader('Expense by Category (খরচ বিভাজন)', Icons.pie_chart_outline, colors.inkAlt),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: colors.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: colors.line),
               ),
               child: Column(
                 children: expenseByType.entries.map((entry) {
@@ -1377,7 +1386,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           child: Text(
                             '${pct.toStringAsFixed(1)}%',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            style: TextStyle(fontSize: 12, color: colors.muted),
                           ),
                         ),
                         Expanded(
@@ -1397,21 +1406,21 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
           ],
 
           // 6. Sales Breakdown DataTable
-          _buildSectionHeader('Sales Invoices (বিক্রয় বিবরণী)', Icons.receipt_long, Colors.blue),
+          _buildSectionHeader('Sales Invoices (বিক্রয় বিবরণী)', Icons.receipt_long, colors.info),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: colors.card,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: colors.line),
             ),
             child: sales.isEmpty
-                ? const Padding(
+                ? Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     child: Center(
                       child: Text(
                         'এই ব্যাচে এখনো কোনো সেল রেকর্ড নেই',
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(color: colors.muted),
                       ),
                     ),
                   )
@@ -1420,7 +1429,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                     child: DataTable(
                       headingRowHeight: 40,
                       dataRowHeight: 46,
-                      headingRowColor: MaterialStatePropertyAll<Color?>(Colors.blue.shade50),
+                      headingRowColor: MaterialStatePropertyAll<Color?>(colors.infoSoft),
                       columns: const [
                         DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -1438,7 +1447,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           DataCell(Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.08),
+                              color: colors.info.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(item.type, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),

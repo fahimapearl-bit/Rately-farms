@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_colors.dart';
+
 void main() {
   runApp(const RatelyFarmsApp());
 }
@@ -14,7 +16,7 @@ class RatelyFarmsApp extends StatelessWidget {
     return MaterialApp(
       title: 'Rately Farms',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.green),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: AppColors.light.brand),
       home: const HomePage(),
     );
   }
@@ -398,7 +400,7 @@ class _BatchListPageState extends State<BatchListPage> {
                   subtitle: Text(
                       '${b.breed} - ${b.initialBirds} birds - ${b.shed}'),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
+                    icon: const Icon(Icons.delete, color: AppColors.light.error),
                     onPressed: () => confirmDelete(context, index),
                   ),
                 );

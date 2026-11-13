@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// Shared feedback wrapper for Supabase operations.
 ///
 /// It keeps error formatting and SnackBar styling consistent across screens
@@ -12,10 +14,11 @@ class SupabaseErrorHandler {
     required String operation,
     required Object error,
   }) {
+    final colors = context.colors;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$operation হয়নি: $error'),
-        backgroundColor: Colors.red,
+        backgroundColor: colors.error,
         duration: const Duration(seconds: 8),
       ),
     );

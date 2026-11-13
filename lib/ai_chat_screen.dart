@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 /// AI Chat Room: answers use only real recorded batch data (no forecasts).
 class AiChatScreen extends StatefulWidget {
   final String batchId;
@@ -160,6 +162,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   }
 
   Widget _bubble(Map<String, dynamic> m) {
+    final colors = context.colors;
     final me = m['role'] == 'user';
     final t = DateTime.tryParse(m['created_at']?.toString() ?? '')?.toLocal();
     final txt = (m['content'] ?? '').toString();
@@ -170,7 +173,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         padding: const EdgeInsets.all(12),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
         decoration: BoxDecoration(
-          color: me ? Colors.teal.shade700 : Colors.grey.shade100,
+          color: me ? colors.accent : colors.surfaceAlt,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -179,12 +182,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
             txt.isEmpty
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : SelectableText(txt.replaceAll('**', ''),
-                    style: TextStyle(color: me ? Colors.white : Colors.black87, fontSize: 14)),
+                    style: TextStyle(color: me ? colors.card : colors.ink, fontSize: 14)),
             if (t != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(DateFormat('dd MMM, hh:mm a').format(t),
-                    style: TextStyle(fontSize: 10, color: me ? Colors.white70 : Colors.black45)),
+                    style: TextStyle(fontSize: 10, color: me ? colors.onAccentMuted : colors.muted)),
               ),
           ],
         ),
@@ -194,6 +197,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -213,11 +217,11 @@ class _AiChatScreenState extends State<AiChatScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _msgs.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text('Ask anything about this batch.\nAnswers use your recorded data only.',
-                              textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+                              textAlign: TextAlign.center, style: TextStyle(color: colors.muted)),
                         ),
                       )
                     : ListView.builder(
@@ -263,12 +267,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   const SizedBox(width: 6),
                   IconButton(
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.teal.shade700,
-                      foregroundColor: Colors.white,
+                      backgroundColor: colors.accent,
+                      foregroundColor: colors.card,
                     ),
                     onPressed: _sending ? null : () => _send(_input.text),
                     icon: _sending
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: colors.card))
                         : const Icon(Icons.send),
                   ),
                 ],

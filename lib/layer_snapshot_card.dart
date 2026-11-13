@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'layer_performance_screen.dart';
 
+import 'app_colors.dart';
+
 /// Small dashboard header card. Shows only when an Active Egg Production batch exists.
 class LayerSnapshotCard extends StatefulWidget {
   final VoidCallback? onTap;
@@ -67,6 +69,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     if (_loading || _batch == null) return const SizedBox.shrink();
 
     final today = DateTime.now().toIso8601String().split('T').first;
@@ -82,10 +85,10 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
       padding: const EdgeInsets.only(top: 12),
       child: Card(
         elevation: 0,
-        color: Colors.amber.shade50,
+        color: colors.warningSoft,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.amber.shade200),
+          side: BorderSide(color: colors.noticeBorder),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -103,7 +106,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.egg_outlined, color: Colors.amber.shade800, size: 20),
+                    Icon(Icons.egg_outlined, color: colors.warning, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -113,14 +116,14 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
                       ),
                     ),
                     Text(isToday ? 'Today' : 'Latest',
-                        style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
+                        style: TextStyle(fontSize: 12, color: colors.warning)),
                     const Icon(Icons.chevron_right, size: 18),
                   ],
                 ),
                 const SizedBox(height: 10),
                 if (log == null)
                   Text('No entry yet — Tap to add',
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700))
+                      style: TextStyle(fontSize: 13, color: colors.inkAlt))
                 else ...[
                   Row(
                     children: [
@@ -133,7 +136,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
                   Text(
                     'Birds $_currentBirds · Mortality ${mortality.toStringAsFixed(0)} · Updated ${log['log_date']}'
                     '${isToday ? '' : '  (No entry today — Tap to add)'}',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                    style: TextStyle(fontSize: 11.5, color: colors.inkAlt),
                   ),
                 ],
               ],
@@ -144,13 +147,16 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
     );
   }
 
-  Widget _metric(String label, String value) => Expanded(
+  Widget _metric(String label, String value) {
+    final colors = context.colors;
+    return Expanded(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            Text(label, style: TextStyle(fontSize: 11, color: colors.muted)),
             Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
       );
+  }
 }

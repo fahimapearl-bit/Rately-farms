@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 class SalesScreenNew extends StatefulWidget {
   const SalesScreenNew({super.key});
 
@@ -69,11 +71,12 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   }
 
   void _msg(String text, {bool error = false}) {
+    final colors = context.colors;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
-        backgroundColor: error ? Colors.red : Colors.green,
+        backgroundColor: error ? colors.error : colors.brand,
       ),
     );
   }
@@ -219,6 +222,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   }
 
   Future<bool> _delete(Map<String, dynamic> s) async {
+    final colors = context.colors;
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -232,7 +236,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text('Delete', style: TextStyle(color: colors.error)),
           ),
         ],
       ),
@@ -253,6 +257,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -314,7 +319,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                         'Initial Birds: $initialBirds | Sold so far: $birdsSoldQty birds',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade700,
+                          color: colors.inkAlt,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -448,19 +453,19 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: colors.successSoft,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.shade200),
+                      border: Border.all(color: colors.brandSoft),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Estimated Total:',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Colors.green,
+                            color: colors.brand,
                           ),
                         ),
                         Text(
@@ -468,7 +473,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green.shade900,
+                            color: colors.brand,
                           ),
                         ),
                       ],
@@ -520,12 +525,12 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                     child: FilledButton.icon(
                       onPressed: saving ? null : _save,
                       icon: saving
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: colors.card,
                               ),
                             )
                           : const Icon(Icons.save),
@@ -588,10 +593,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                 key: ValueKey(s['id']),
                 direction: DismissDirection.endToStart,
                 background: Container(
-                  color: Colors.red,
+                  color: colors.error,
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 16),
-                  child: const Icon(Icons.delete, color: Colors.white),
+                  child: Icon(Icons.delete, color: colors.card),
                 ),
                 confirmDismiss: (_) => _delete(s),
                 child: ListTile(
@@ -603,10 +608,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                             ? Icons.shopping_bag
                             : Icons.egg,
                     color: t == 'Bird'
-                        ? Colors.green
+                        ? colors.brand
                         : t == 'Litter'
-                            ? Colors.brown
-                            : Colors.orange,
+                            ? colors.warning
+                            : colors.warning,
                   ),
                   title: Text(
                     '$t  •  ${amt.toStringAsFixed(2)} tk',

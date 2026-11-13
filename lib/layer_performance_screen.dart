@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
+import 'app_colors.dart';
+
 class LayerPerformanceScreen extends StatefulWidget {
   final String? initialBatchId;
 
@@ -81,9 +83,10 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading batches: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Error loading batches: $e'), backgroundColor: colors.error),
         );
       }
     }
@@ -135,6 +138,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
 
   // Open Bottom Sheet Form to Log Today's or Selected Date's Production
   void _openLogEntrySheet([Map<String, dynamic>? existingLog]) {
+    final colors = context.colors;
     if (_selectedBatch == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select an active batch first')),
@@ -173,7 +177,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: colors.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -197,7 +201,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                       children: [
                         Text(
                           existingLog != null ? 'Edit Egg & Feed Log' : 'Log Daily Eggs & Feed',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.inkAlt),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -223,20 +227,20 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: colors.surfaceAlt,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
+                          border: Border.all(color: colors.line),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_month, size: 18, color: Color(0xFFD97706)),
+                            Icon(Icons.calendar_month, size: 18, color: colors.warning),
                             const SizedBox(width: 8),
                             Text(
                               'Date: ${_displayFormat.format(selectedDate)}',
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                             ),
                             const Spacer(),
-                            const Text('Change', style: TextStyle(color: Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text('Change', style: TextStyle(color: colors.warning, fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -254,7 +258,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                             decoration: InputDecoration(
                               labelText: 'Good Eggs *',
                               hintText: 'e.g. 850',
-                              prefixIcon: const Icon(Icons.egg_outlined, color: Colors.green),
+                              prefixIcon: Icon(Icons.egg_outlined, color: colors.brand),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
@@ -288,7 +292,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                             decoration: InputDecoration(
                               labelText: 'Feed Consumed (kg) *',
                               hintText: 'e.g. 110.5',
-                              prefixIcon: const Icon(Icons.restaurant_outlined, color: Color(0xFFD97706)),
+                              prefixIcon: Icon(Icons.restaurant_outlined, color: colors.warning),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
@@ -321,7 +325,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                             decoration: InputDecoration(
                               labelText: 'Mortality (Birds)',
                               hintText: '0',
-                              prefixIcon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                              prefixIcon: Icon(Icons.warning_amber_rounded, color: colors.error),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                             ),
@@ -363,12 +367,12 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                       height: 48,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFD97706),
-                          foregroundColor: Colors.white,
+                          backgroundColor: colors.warning,
+                          foregroundColor: colors.card,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         icon: _isSaving
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: colors.card, strokeWidth: 2))
                             : const Icon(Icons.check_circle_outline),
                         label: Text(
                           _isSaving ? 'Saving...' : 'Save Daily Record',
@@ -395,6 +399,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                                 final totalEggs = goodEggs + damagedEggs;
                                 final activeBirds = _calculateActiveBirds();
                                 if (activeBirds > 0 && totalEggs > activeBirds) {
+                                  final colors = context.colors;
                                   final proceed = await showDialog<bool>(
                                     context: ctx,
                                     barrierDismissible: false,
@@ -402,7 +407,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                       title: Row(
                                         children: [
-                                          Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                                          Icon(Icons.warning_amber_rounded, color: colors.warning, size: 28),
                                           SizedBox(width: 8),
                                           Text('Egg Count Warning'),
                                         ],
@@ -415,12 +420,12 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(dCtx, false),
-                                          child: const Text('Review Input', style: TextStyle(color: Colors.grey)),
+                                          child: Text('Review Input', style: TextStyle(color: colors.muted)),
                                         ),
                                         ElevatedButton(
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.orange.shade700,
-                                            foregroundColor: Colors.white,
+                                            backgroundColor: colors.warning,
+                                            foregroundColor: colors.card,
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                           ),
                                           onPressed: () => Navigator.pop(dCtx, true),
@@ -489,15 +494,17 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
           );
 
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Daily log saved successfully!'), backgroundColor: Colors.green),
+          SnackBar(content: Text('Daily log saved successfully!'), backgroundColor: colors.brand),
         );
         _loadDailyLogs(_selectedBatch!['id'].toString());
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save log: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Failed to save log: $e'), backgroundColor: colors.error),
         );
       }
     } finally {
@@ -506,6 +513,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Future<void> _deleteLog(String logId) async {
+    final colors = context.colors;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -514,7 +522,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: colors.error, foregroundColor: colors.card),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -534,8 +542,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting record: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Error deleting record: $e'), backgroundColor: colors.error),
         );
       }
     }
@@ -543,10 +552,11 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: colors.surfaceAlt,
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -555,12 +565,12 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
             ),
             Text(
               'Daily Egg & Feed Production Board',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+              style: TextStyle(fontSize: 12, color: colors.onAccentMuted),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFFB45309), // Warm amber-bronze for egg layer
-        foregroundColor: Colors.white,
+        backgroundColor: colors.warning, // Warm amber-bronze for egg layer
+        foregroundColor: colors.card,
         elevation: 0,
         actions: [
           IconButton(
@@ -573,8 +583,8 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFFD97706),
-        foregroundColor: Colors.white,
+        backgroundColor: colors.warning,
+        foregroundColor: colors.card,
         icon: const Icon(Icons.add),
         label: const Text('Log Today', style: TextStyle(fontWeight: FontWeight.bold)),
         onPressed: () => _openLogEntrySheet(),
@@ -612,16 +622,17 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildBatchSelector() {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
       ),
       child: Row(
         children: [
-          const Icon(Icons.layers_outlined, color: Color(0xFFD97706), size: 20),
+          Icon(Icons.layers_outlined, color: colors.warning, size: 20),
           const SizedBox(width: 10),
           const Text('Batch: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Expanded(
@@ -659,6 +670,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildTodayKpiSection() {
+    final colors = context.colors;
     final activeBirds = _calculateActiveBirds();
     final todayStr = _dateFormat.format(DateTime.now());
 
@@ -694,22 +706,22 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
               children: [
                 Text(
                   isToday ? "Today's Performance" : "Latest Recorded Status",
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: colors.inkAlt),
                 ),
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: isToday ? Colors.green.shade50 : Colors.amber.shade50,
+                    color: isToday ? colors.successSoft : colors.warningSoft,
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: isToday ? Colors.green.shade300 : Colors.amber.shade300),
+                    border: Border.all(color: isToday ? colors.brandSoft : colors.warningBorder),
                   ),
                   child: Text(
                     isToday ? 'Live Today' : (latestLog != null ? _displayFormat.format(DateTime.parse(latestLog['log_date'])) : 'No data'),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: isToday ? Colors.green.shade800 : Colors.amber.shade900,
+                      color: isToday ? colors.brand : colors.warning,
                     ),
                   ),
                 ),
@@ -717,7 +729,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
             ),
             Text(
               'Birds: $activeBirds',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade700),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.inkAlt),
             ),
           ],
         ),
@@ -733,9 +745,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                 title: 'Laying Rate (HDP)',
                 value: latestLog != null ? '${hdp.toStringAsFixed(1)}%' : '---',
                 subtitle: hdp >= 80 ? 'Optimal Production' : (hdp > 50 ? 'Moderate' : 'Low / Rising'),
-                badgeColor: hdp >= 80 ? Colors.green : (hdp > 50 ? Colors.amber.shade800 : Colors.grey),
+                badgeColor: hdp >= 80 ? colors.brand : (hdp > 50 ? colors.warning : colors.muted),
                 icon: Icons.trending_up,
-                accentColor: const Color(0xFF15803D),
+                accentColor: colors.brand,
               ),
             ),
             const SizedBox(width: 8),
@@ -746,9 +758,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                 title: 'Total Eggs',
                 value: latestLog != null ? NumberFormat('#,###').format(totalEggs) : '0',
                 subtitle: 'Good: $goodEggs | Bad: $damagedEggs',
-                badgeColor: const Color(0xFFD97706),
+                badgeColor: colors.warning,
                 icon: Icons.egg_rounded,
-                accentColor: const Color(0xFFD97706),
+                accentColor: colors.warning,
               ),
             ),
           ],
@@ -762,9 +774,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                 title: 'Feed / Bird',
                 value: feedPerBirdGrams > 0 ? '${feedPerBirdGrams.toStringAsFixed(0)} g' : '---',
                 subtitle: 'Total: ${feedKg.toStringAsFixed(1)} kg',
-                badgeColor: Colors.blueGrey,
+                badgeColor: colors.inkAlt,
                 icon: Icons.restaurant,
-                accentColor: const Color(0xFF0369A1),
+                accentColor: colors.info,
               ),
             ),
             const SizedBox(width: 8),
@@ -774,9 +786,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                 title: 'Mortality',
                 value: '$mortality birds',
                 subtitle: mortality == 0 ? 'Healthy Flock' : 'Check bio-security',
-                badgeColor: mortality > 2 ? Colors.red : Colors.teal,
+                badgeColor: mortality > 2 ? colors.error : colors.accent,
                 icon: Icons.healing,
-                accentColor: mortality > 2 ? Colors.red.shade700 : Colors.teal.shade700,
+                accentColor: mortality > 2 ? colors.error : colors.accent,
               ),
             ),
           ],
@@ -793,12 +805,13 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
     required IconData icon,
     required Color accentColor,
   }) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,7 +822,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blueGrey.shade600),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.inkAlt),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -833,6 +846,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildTrendChartSection() {
+    final colors = context.colors;
     if (_dailyLogs.isEmpty) return const SizedBox.shrink();
 
     // Take recent 7 logs and reverse so oldest is left, latest is right
@@ -842,9 +856,9 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,19 +866,19 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.bar_chart_rounded, size: 18, color: Color(0xFFD97706)),
+                  Icon(Icons.bar_chart_rounded, size: 18, color: colors.warning),
                   SizedBox(width: 6),
                   Text(
                     '7-Day Laying Trend',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: colors.inkAlt),
                   ),
                 ],
               ),
               Text(
                 'Eggs & HDP %',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 11, color: colors.muted, fontWeight: FontWeight.w500),
               ),
             ],
           ),
@@ -888,7 +902,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                   children: [
                     Text(
                       '${hdp.toStringAsFixed(0)}%',
-                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colors.warning),
                     ),
                     const SizedBox(height: 3),
                     Container(
@@ -897,8 +911,8 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            const Color(0xFFF59E0B),
-                            const Color(0xFFD97706),
+                            colors.warning,
+                            colors.warning,
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -909,7 +923,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                     const SizedBox(height: 6),
                     Text(
                       dayLabel,
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                      style: TextStyle(fontSize: 10, color: colors.muted, fontWeight: FontWeight.w600),
                     ),
                   ],
                 );
@@ -922,19 +936,20 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildHistorySection() {
+    final colors = context.colors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Daily Records History',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B)),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colors.inkAlt),
             ),
             Text(
               '${_dailyLogs.length} entries',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 11, color: colors.muted),
             ),
           ],
         ),
@@ -956,6 +971,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildHistoryCard(Map<String, dynamic> row) {
+    final colors = context.colors;
     final logId = row['id'].toString();
     final dateStr = _displayFormat.format(DateTime.tryParse(row['log_date'].toString()) ?? DateTime.now());
     final totalEggs = _getInt(row['total_eggs']);
@@ -968,10 +984,10 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
-      color: Colors.white,
+      color: colors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.grey.shade200),
+        side: BorderSide(color: colors.line),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -983,7 +999,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_outlined, size: 13, color: Color(0xFFD97706)),
+                    Icon(Icons.calendar_today_outlined, size: 13, color: colors.warning),
                     const SizedBox(width: 6),
                     Text(
                       dateStr,
@@ -995,11 +1011,11 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
                   children: [
                     Text(
                       '${NumberFormat('#,###').format(totalEggs)} eggs',
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFFB45309)),
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: colors.warning),
                     ),
                     const SizedBox(width: 4),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.grey),
+                      icon: Icon(Icons.delete_outline, size: 16, color: colors.muted),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: () => _deleteLog(logId),
@@ -1011,16 +1027,16 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
             const SizedBox(height: 6),
             Row(
               children: [
-                _buildMiniBadge('Good: $goodEggs', Colors.green.shade700, Colors.green.shade50),
+                _buildMiniBadge('Good: $goodEggs', colors.brand, colors.successSoft),
                 const SizedBox(width: 6),
                 if (damagedEggs > 0) ...[
-                  _buildMiniBadge('Broken: $damagedEggs', Colors.red.shade700, Colors.red.shade50),
+                  _buildMiniBadge('Broken: $damagedEggs', colors.error, colors.errorSoft),
                   const SizedBox(width: 6),
                 ],
-                _buildMiniBadge('Feed: ${feedKg.toStringAsFixed(1)} kg', Colors.blueGrey.shade800, Colors.blueGrey.shade50),
+                _buildMiniBadge('Feed: ${feedKg.toStringAsFixed(1)} kg', colors.inkAlt, colors.inkAlt),
                 if (mortality > 0) ...[
                   const SizedBox(width: 6),
-                  _buildMiniBadge('Dead: $mortality', Colors.red.shade900, Colors.red.shade50),
+                  _buildMiniBadge('Dead: $mortality', colors.error, colors.errorSoft),
                 ],
               ],
             ),
@@ -1028,7 +1044,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
               const SizedBox(height: 6),
               Text(
                 'Note: $notes',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.grey.shade700),
+                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: colors.inkAlt),
               ),
             ],
           ],
@@ -1052,23 +1068,24 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   }
 
   Widget _buildEmptyState(String msg) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.all(24),
       margin: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
       ),
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.egg_outlined, size: 40, color: Colors.grey.shade400),
+            Icon(Icons.egg_outlined, size: 40, color: colors.hint),
             const SizedBox(height: 10),
             Text(
               msg,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: colors.muted),
             ),
           ],
         ),

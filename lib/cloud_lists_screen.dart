@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'supabase_repository.dart';
 
+import 'app_colors.dart';
+
 String _cloudDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
@@ -65,13 +67,15 @@ class _CloudBatchListScreenState extends State<CloudBatchListScreen> {
   }
 
   void _showError(String text) {
+    final colors = context.colors;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Batch action failed: $text'), backgroundColor: Colors.red),
+      SnackBar(content: Text('Batch action failed: $text'), backgroundColor: colors.error),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Batch List'),
@@ -85,7 +89,7 @@ class _CloudBatchListScreenState extends State<CloudBatchListScreen> {
                   ? const Center(child: Text('কোনো Supabase batch নেই'))
                   : _TableFrame(
                       child: DataTable(
-                        headingRowColor: MaterialStatePropertyAll(Colors.green.shade100),
+                        headingRowColor: MaterialStatePropertyAll(colors.brandSoft),
                         columns: const [
                           DataColumn(label: Text('Batch')),
                           DataColumn(label: Text('Category')),
@@ -103,7 +107,7 @@ class _CloudBatchListScreenState extends State<CloudBatchListScreen> {
                                   DataCell(Text('${batch.initialBirds}')),
                                   DataCell(IconButton(
                                     tooltip: 'Delete',
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                    icon: Icon(Icons.delete_outline, color: colors.error),
                                     onPressed: () => deleteBatch(batch),
                                   )),
                                 ]))
@@ -179,8 +183,9 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
       if (mounted) setState(() => records.removeWhere((item) => item.id == record.id));
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Daily record delete হয়নি: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Daily record delete হয়নি: $e'), backgroundColor: colors.error),
         );
       }
     }
@@ -188,6 +193,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Daily Records List'),
@@ -201,7 +207,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
                   ? const Center(child: Text('কোনো Supabase daily record নেই'))
                   : _TableFrame(
                       child: DataTable(
-                        headingRowColor: MaterialStatePropertyAll(Colors.green.shade100),
+                        headingRowColor: MaterialStatePropertyAll(colors.brandSoft),
                         columns: const [
                           DataColumn(label: Text('Date')),
                           DataColumn(label: Text('Batch')),
@@ -223,7 +229,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
                                   DataCell(Text(record.remarks)),
                                   DataCell(IconButton(
                                     tooltip: 'Delete',
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                    icon: Icon(Icons.delete_outline, color: colors.error),
                                     onPressed: () => deleteRecord(record),
                                   )),
                                 ]))

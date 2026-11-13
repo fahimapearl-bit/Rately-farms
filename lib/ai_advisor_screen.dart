@@ -1,8 +1,9 @@
 import 'ai_chat_screen.dart';
-import 'poultry_standards.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+
+import 'app_colors.dart';
 
 class AiAdvisorScreen extends StatefulWidget {
   const AiAdvisorScreen({super.key});
@@ -27,7 +28,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   int _flockAgeDays = 0;
   double _latestAvgWeightKg = 0.0;
   DateTime? _latestWeightDate;
-  double _totalFeedKg = 0.0;
   double _totalExpenses = 0.0;
   double _totalSales = 0.0;
 
@@ -41,13 +41,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   double _adminDefaultPrice = 0.0;
   final TextEditingController _negotiatingPriceController = TextEditingController();
   double _negotiatingPrice = 0.0;
-
-  static const _ink = Color(0xFF102A1F);
-  static const _muted = Color(0xFF6B7280);
-  static const _line = Color(0xFFE5E9E6);
-  static const _soft = Color(0xFFF4F7F5);
-  static const _brand = Color(0xFF1B5E20);
-  static const _brandSoft = Color(0xFFE8F2E9);
 
   @override
   void initState() {
@@ -66,7 +59,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     try {
       final res = await _supabase
           .from('batches')
-          .select('id, name, production_type, breed, shed, start_date, initial_birds, additional_birds, chick_price, status')
+          .select('id, name, production_type, breed, shed, start_date, initial_birds, chick_price, status')
           .eq('status', 'Active')
           .order('start_date', ascending: false);
 
@@ -81,7 +74,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load batches: $e')),
+          SnackBar(content: Text('Error loading batches: $e')),
         );
         setState(() => _isLoading = false);
       }
@@ -91,7 +84,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   Future<void> _fetchBatchActualMetrics(String batchId) async {
     setState(() => _isLoading = true);
     try {
-      _totalFeedKg = 0.0;
       // 1. Batch info
       final batchRes = await _supabase
           .from('batches')
@@ -100,8 +92,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           .single();
       _selectedBatch = batchRes;
       _initialBirds = (batchRes['initial_birds'] as num?)?.toInt() ?? 0;
-      final additionalBirds = (batchRes['additional_birds'] as num?)?.toInt() ?? 0;
-      final placedBirds = _initialBirds + additionalBirds;
 
       // Age calculation
       DateTime? startDate;
@@ -121,7 +111,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
       // 2. Mortality, Eggs & First Laying Date
       int mort = 0;
-      double feedSum = 0.0;
       int eggs = 0;
       int latestEggs = 0;
       DateTime? firstEggDate;
@@ -152,26 +141,13 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       } else {
         final dailyRes = await _supabase
             .from('daily_records')
-            .select('mortality, feed_kg')
+            .select('mortality')
             .eq('batch_id', batchId);
         for (var row in dailyRes) {
           mort += (row['mortality'] as num?)?.toInt() ?? 0;
-          feedSum += (row['feed_kg'] as num?)?.toDouble() ?? 0.0;
         }
       }
 
-      // Feed total for FCR (layers may also log feed in daily_records)
-      if (isLayer) {
-        final feedRes = await _supabase
-            .from('daily_records')
-            .select('feed_kg')
-            .eq('batch_id', batchId);
-        for (var row in feedRes) {
-          feedSum += (row['feed_kg'] as num?)?.toDouble() ?? 0.0;
-        }
-      }
-
-      _totalFeedKg = feedSum;
       _totalMortality = mort;
       _totalEggsCollected = eggs;
       _latestDailyEggs = latestEggs;
@@ -201,7 +177,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       }
       _birdsSold = soldCount;
       _totalSales = sumSales;
-      _currentBirds = (placedBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
+      _currentBirds = (_initialBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
 
       // 4. Latest Average Weight (Meat & Layer)
       final weightRes = await _supabase
@@ -267,7 +243,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load batch metrics: $e')),
+          SnackBar(content: Text('Error loading metrics: $e')),
         );
         setState(() => _isLoading = false);
       }
@@ -276,6 +252,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final currencyFormat = NumberFormat('#,##0.0', 'en_US');
 
     final isLayer = (_selectedBatch?['production_type'] ?? '')
@@ -307,20 +284,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     final batchName = (_selectedBatch?['name'] ?? 'Batch').toString();
 
     return Scaffold(
-      backgroundColor: _soft,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: _ink,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'AI Advisor',
-          style: TextStyle(fontWeight: FontWeight.w700, letterSpacing: -0.2),
-        ),
-        centerTitle: false,
+        title: const Text('AI & Batch Advisor'),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.auto_awesome, color: Colors.amber),
+            icon: Icon(Icons.auto_awesome, color: colors.warning),
             tooltip: 'Open AI Window',
             onPressed: _selectedBatchId == null
                 ? null
@@ -364,12 +333,6 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       _buildActualsGrid(isLayer, totalLiveWeightKg),
                       const SizedBox(height: 16),
 
-                      _buildFcrCard(totalLiveWeightKg),
-                      const SizedBox(height: 16),
-
-                      _buildStandardCompareCard(),
-                      const SizedBox(height: 16),
-
                       // 4. Financials & Break-Even Card
                       _buildBreakEvenAndValuationCard(
                         isLayer: isLayer,
@@ -407,13 +370,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 ),
         icon: const Icon(Icons.auto_awesome),
         label: const Text('Open AI Window'),
-        backgroundColor: Colors.teal.shade700,
-        foregroundColor: Colors.white,
+        backgroundColor: colors.accent,
+        foregroundColor: colors.card,
       ),
     );
   }
 
   Widget _buildBatchProfileCard(bool isLayer) {
+    final colors = context.colors;
     final breed = _selectedBatch?['breed']?.toString();
     final shed = _selectedBatch?['shed']?.toString();
     final startDateStr = _selectedBatch?['start_date']?.toString();
@@ -432,12 +396,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isLayer ? Colors.amber.shade50 : Colors.teal.shade50,
+                    color: isLayer ? colors.warningSoft : colors.accentSoft,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
                     isLayer ? Icons.egg : Icons.analytics_outlined,
-                    color: isLayer ? Colors.amber.shade800 : Colors.teal,
+                    color: isLayer ? colors.warning : colors.accent,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -479,28 +443,28 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       ? '$ageWeeks wks $ageDaysRem d'
                       : 'Day $_flockAgeDays ($ageWeeks wks)',
                   icon: Icons.calendar_today_outlined,
-                  color: Colors.indigo,
+                  color: colors.info,
                 ),
                 if (breed != null && breed.isNotEmpty)
                   _buildProfileBadge(
                     label: 'Breed',
                     value: breed,
                     icon: Icons.category_outlined,
-                    color: Colors.brown,
+                    color: colors.warning,
                   ),
                 if (shed != null && shed.isNotEmpty)
                   _buildProfileBadge(
                     label: 'Shed',
                     value: shed,
                     icon: Icons.warehouse_outlined,
-                    color: Colors.blueGrey,
+                    color: colors.inkAlt,
                   ),
                 if (startDateStr != null)
                   _buildProfileBadge(
                     label: 'Started',
                     value: DateFormat('dd MMM').format(DateTime.parse(startDateStr)),
                     icon: Icons.event,
-                    color: Colors.grey.shade700,
+                    color: colors.inkAlt,
                   ),
               ],
             ),
@@ -516,6 +480,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required IconData icon,
     required Color color,
   }) {
+    final colors = context.colors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -525,7 +490,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             const SizedBox(width: 3),
             Text(
               label,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 10, color: colors.muted),
             ),
           ],
         ),
@@ -543,18 +508,19 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   }
 
   Widget _buildAiConsultationBanner(String batchName, bool isLayer) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.teal.shade800, Colors.teal.shade600],
+          colors: [colors.accent, colors.accent],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.teal.withOpacity(0.25),
+            color: colors.accent.withOpacity(0.25),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -575,20 +541,20 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: colors.onAccent.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 22),
+              child: Icon(Icons.auto_awesome, color: colors.warning, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Ask AI Advisor About This Batch',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: colors.card,
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -599,14 +565,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                         ? 'Analyzes first laying age, egg break-even & flock health'
                         : 'Analyzes weight standards, break-even price & profit margins',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.85),
+                      color: colors.onAccent.withOpacity(0.85),
                       fontSize: 11,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+            Icon(Icons.arrow_forward_ios, color: colors.card, size: 14),
           ],
         ),
       ),
@@ -614,6 +580,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
   }
 
   Widget _buildActualsGrid(bool isLayer, double totalLiveWeightKg) {
+    final colors = context.colors;
     final currency = NumberFormat('#,##0');
     final mortPercent = _initialBirds > 0 ? ((_totalMortality / _initialBirds) * 100) : 0.0;
 
@@ -646,7 +613,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 sub: 'Mort: $_totalMortality (${mortPercent.toStringAsFixed(1)}%)' +
                     (_birdsSold > 0 ? ' | Sold: $_birdsSold' : ''),
                 icon: Icons.pets,
-                color: Colors.blue,
+                color: colors.info,
               ),
             ),
             const SizedBox(width: 10),
@@ -657,7 +624,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       value: firstEggText,
                       sub: firstEggSub,
                       icon: Icons.egg,
-                      color: Colors.amber.shade800,
+                      color: colors.warning,
                     )
                   : _buildMetricTile(
                       title: 'Avg Weight',
@@ -666,7 +633,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           ? DateFormat('dd MMM').format(_latestWeightDate!)
                           : 'No weight logged',
                       icon: Icons.scale_outlined,
-                      color: Colors.orange,
+                      color: colors.warning,
                     ),
             ),
           ],
@@ -680,7 +647,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                 value: 'TK ${currency.format(_totalExpenses)}',
                 sub: 'Sales: TK ${currency.format(_totalSales)} | Net: TK ${currency.format(_totalExpenses - _totalSales)}',
                 icon: Icons.account_balance_wallet_outlined,
-                color: Colors.indigo,
+                color: colors.info,
               ),
             ),
             const SizedBox(width: 10),
@@ -693,14 +660,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           ? 'Avg ${(_totalEggsCollected / _currentBirds).toStringAsFixed(1)} eggs/hen'
                           : 'Actual logged',
                       icon: Icons.bar_chart_outlined,
-                      color: Colors.teal,
+                      color: colors.accent,
                     )
                   : _buildMetricTile(
                       title: 'Standing Biomass',
                       value: '${totalLiveWeightKg.toStringAsFixed(0)} kg',
                       sub: '$_currentBirds live birds',
                       icon: Icons.fitness_center,
-                      color: Colors.teal,
+                      color: colors.accent,
                     ),
             ),
           ],
@@ -716,6 +683,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required IconData icon,
     required Color color,
   }) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -733,7 +701,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 12, color: colors.inkAlt, fontWeight: FontWeight.w600),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -751,7 +719,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           const SizedBox(height: 2),
           Text(
             sub,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 11, color: colors.muted),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -770,6 +738,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required double dailyEggRevenue,
     required NumberFormat currencyFormat,
   }) {
+    final colors = context.colors;
     final bool isMeatProfit = meatRunningProfitLoss >= 0;
     final bool isEggSurplus = eggRunningMargin >= 0;
 
@@ -783,7 +752,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.calculate_outlined, color: Colors.indigo),
+                Icon(Icons.calculate_outlined, color: colors.info),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -808,10 +777,10 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                   isLayer
                       ? 'TK ${breakEvenPerEgg.toStringAsFixed(2)} / pc'
                       : 'TK ${breakEvenPerKg.toStringAsFixed(2)} / kg',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.indigo,
+                    color: colors.info,
                   ),
                 ),
               ],
@@ -831,7 +800,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.teal.shade800,
+                      color: colors.accent,
                     ),
                   ),
                 ],
@@ -843,7 +812,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               isLayer
                   ? 'Total expenses divided by collected eggs to date.'
                   : 'Target weight per bird needed to break even at current negotiating price.',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 11, color: colors.muted),
             ),
             const SizedBox(height: 16),
 
@@ -851,7 +820,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: colors.surfaceAlt,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
@@ -870,7 +839,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                         'Admin: TK ${_adminDefaultPrice.toStringAsFixed(isLayer ? 1 : 0)}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.teal.shade700,
+                          color: colors.accent,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -885,7 +854,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       prefixText: 'TK ',
                       hintText: 'Enter buyer offered rate',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      fillColor: Colors.white,
+                      fillColor: colors.card,
                       filled: true,
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.restore, size: 18),
@@ -915,10 +884,10 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isMeatProfit ? Colors.green.shade50 : Colors.red.shade50,
+                  color: isMeatProfit ? colors.successSoft : colors.errorSoft,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isMeatProfit ? Colors.green.shade300 : Colors.red.shade300,
+                    color: isMeatProfit ? colors.brandSoft : colors.errorBorder,
                   ),
                 ),
                 child: Row(
@@ -932,12 +901,12 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isMeatProfit ? Colors.green.shade900 : Colors.red.shade900,
+                            color: isMeatProfit ? colors.brand : colors.error,
                           ),
                         ),
                         Text(
                           'If sold today at TK ${_negotiatingPrice.toStringAsFixed(0)}/kg',
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                          style: TextStyle(fontSize: 11, color: colors.inkAlt),
                         ),
                       ],
                     ),
@@ -946,7 +915,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: isMeatProfit ? Colors.green.shade800 : Colors.red.shade800,
+                        color: isMeatProfit ? colors.brand : colors.error,
                       ),
                     ),
                   ],
@@ -956,10 +925,10 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isEggSurplus ? Colors.green.shade50 : Colors.blue.shade50,
+                  color: isEggSurplus ? colors.successSoft : colors.infoSoft,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isEggSurplus ? Colors.green.shade300 : Colors.blue.shade300,
+                    color: isEggSurplus ? colors.brandSoft : colors.info,
                   ),
                 ),
                 child: Row(
@@ -973,14 +942,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isEggSurplus ? Colors.green.shade900 : Colors.blue.shade900,
+                            color: isEggSurplus ? colors.brand : colors.info,
                           ),
                         ),
                         Text(
                           _latestDailyEggs > 0
                               ? 'Today\'s egg value: TK ${dailyEggRevenue.toStringAsFixed(0)}'
                               : 'Total eggs × TK ${_negotiatingPrice.toStringAsFixed(1)}/egg',
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                          style: TextStyle(fontSize: 11, color: colors.inkAlt),
                         ),
                       ],
                     ),
@@ -989,7 +958,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: isEggSurplus ? Colors.green.shade800 : Colors.indigo.shade800,
+                        color: isEggSurplus ? colors.brand : colors.info,
                       ),
                     ),
                   ],
@@ -1001,512 +970,59 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     );
   }
 
-  List<Map<String, String>> _generateAdviceList(
-    bool isLayer,
-    double breakEvenPerKg,
-    double breakEvenPerEgg,
-  ) {
-    final List<Map<String, String>> adviceList = [];
-    final placed = _initialBirds + ((_selectedBatch?['additional_birds'] as num?)?.toInt() ?? 0);
-    final mortRate = placed > 0 ? (_totalMortality * 100.0 / placed) : 0.0;
+  List<String> _generateAdviceList(bool isLayer, double breakEvenPerKg, double breakEvenPerEgg) {
+    final List<String> adviceList = [];
 
-    if (mortRate >= 8) {
-      adviceList.add({
-        'level': 'urgent',
-        'title': 'High mortality',
-        'body':
-            'Mortality is ${mortRate.toStringAsFixed(1)}%. Check water sanitation, ventilation, and biosecurity immediately.',
-      });
-    } else if (mortRate >= 4) {
-      adviceList.add({
-        'level': 'watch',
-        'title': 'Mortality elevated',
-        'body':
-            'Mortality is ${mortRate.toStringAsFixed(1)}%. Review daily deaths and isolate weak birds.',
-      });
+    // 1. Mortality & Livability check
+    final double mortRate = _initialBirds > 0 ? (_totalMortality / _initialBirds) * 100 : 0.0;
+    if (mortRate > 4.5) {
+      adviceList.add('🚨 High Mortality (${mortRate.toStringAsFixed(1)}%): Inspect drinking water sanitation, ventilation, and review biosecurity strictly.');
     } else {
-      adviceList.add({
-        'level': 'good',
-        'title': 'Livability healthy',
-        'body':
-            'Survival is solid (${(100 - mortRate).toStringAsFixed(1)}%). Keep feed hygiene and dry litter.',
-      });
+      adviceList.add('✅ Flock Livability is healthy (${(100 - mortRate).toStringAsFixed(1)}%). Continue strict feed hygiene and dry bedding.');
     }
 
-    final liveBiomass = _currentBirds * _latestAvgWeightKg;
-    final fcr = (_totalFeedKg > 0 && liveBiomass > 0) ? _totalFeedKg / liveBiomass : null;
-    if (fcr != null) {
-      if (fcr > 1.85) {
-        adviceList.add({
-          'level': 'urgent',
-          'title': 'High FCR',
-          'body':
-              'FCR is ${fcr.toStringAsFixed(2)}. Review feed wastage, disease pressure, and ration quality.',
-        });
-      } else if (fcr > 1.55) {
-        adviceList.add({
-          'level': 'watch',
-          'title': 'FCR watch',
-          'body':
-              'FCR is ${fcr.toStringAsFixed(2)}. Acceptable, but tighten feeding routine if possible.',
-        });
-      } else {
-        adviceList.add({
-          'level': 'good',
-          'title': 'Strong FCR',
-          'body':
-              'FCR is ${fcr.toStringAsFixed(2)}. Feed conversion is efficient.',
-        });
-      }
-    } else if (_totalFeedKg <= 0) {
-      adviceList.add({
-        'level': 'watch',
-        'title': 'Feed not logged',
-        'body':
-            'Add daily feed (kg) so FCR can guide ration decisions.',
-      });
-    }
-
+    // 2. Production Type specifics
     if (!isLayer) {
-      if (_latestAvgWeightKg <= 0) {
-        adviceList.add({
-          'level': 'watch',
-          'title': 'No weight log',
-          'body':
-              'Log weekly weight in Average Weight so biomass and break-even stay accurate.',
-        });
-      } else if (_negotiatingPrice > 0 &&
-          breakEvenPerKg > 0 &&
-          _negotiatingPrice < breakEvenPerKg) {
-        final gap = (breakEvenPerKg - _negotiatingPrice).toStringAsFixed(0);
-        adviceList.add({
-          'level': 'urgent',
-          'title': 'Price below break-even',
-          'body':
-              'Negotiating price is about TK $gap/kg under break-even (TK ${breakEvenPerKg.toStringAsFixed(0)}/kg). Hold or renegotiate if possible.',
-        });
+      // Meat advice
+      if (_latestAvgWeightKg == 0.0) {
+        adviceList.add('⚖️ No weight log found. Log weekly weight in "Average Weight" screen to compute live biomass & break-even accurately.');
+      } else if (_negotiatingPrice > 0 && _negotiatingPrice < breakEvenPerKg) {
+        final gap = (breakEvenPerKg - _negotiatingPrice).toStringAsFixed(1);
+        adviceList.add('⚠️ Price Alert: Current negotiating price is TK $gap/kg below break-even! Consider holding or negotiating closer to TK ${breakEvenPerKg.toStringAsFixed(0)}/kg.');
       } else {
-        adviceList.add({
-          'level': 'good',
-          'title': 'Weight tracking OK',
-          'body':
-              'Keep feed consistent. Withdraw feed 6–8 hours before catch to protect carcass quality.',
-        });
+        adviceList.add('📈 Weight standard on target. Schedule feed withdrawal 6-8 hours before final bird catching to prevent carcass contamination.');
       }
     } else {
+      // Layer advice (First laying age + laying onset)
       if (_firstLayingAgeDays != null) {
-        final weeks = _firstLayingAgeDays! / 7.0;
-        if (weeks < 18) {
-          adviceList.add({
-            'level': 'watch',
-            'title': 'Early laying onset',
-            'body':
-                'First eggs at ${weeks.toStringAsFixed(1)} weeks. Ensure calcium and body weight to reduce prolapse risk.',
-          });
-        } else if (weeks <= 21) {
-          adviceList.add({
-            'level': 'good',
-            'title': 'Ideal first lay age',
-            'body':
-                'Flock started laying at ${weeks.toStringAsFixed(1)} weeks — within the usual 18–21 week window.',
-          });
+        final double weeks = _firstLayingAgeDays! / 7.0;
+        if (weeks < 18.0) {
+          adviceList.add('⚠️ Early Laying Onset (${weeks.toStringAsFixed(1)} wks): Birds began laying early. Ensure adequate dietary calcium and body weight to avoid prolapse and small eggs.');
+        } else if (weeks <= 21.0) {
+          adviceList.add('🎯 Ideal First Laying Age (${weeks.toStringAsFixed(1)} wks): Flock started laying exactly within the optimal breed standard window (18-21 weeks).');
         } else {
-          adviceList.add({
-            'level': 'watch',
-            'title': 'Delayed first lay',
-            'body':
-                'First eggs at ${weeks.toStringAsFixed(1)} weeks. Review pullet uniformity and lighting step-up.',
-          });
+          adviceList.add('⏳ Delayed First Laying Age (${weeks.toStringAsFixed(1)} wks): Review uniformity of pullet body weight and artificial lighting step-up program.');
         }
       } else {
         final ageWeeks = _flockAgeDays / 7.0;
-        if (ageWeeks >= 18) {
-          adviceList.add({
-            'level': 'watch',
-            'title': 'No egg logs yet',
-            'body':
-                'Flock is ${ageWeeks.toStringAsFixed(1)} weeks with no egg records. Check light (14–16 hrs) and protein intake.',
-          });
+        if (ageWeeks > 21.0) {
+          adviceList.add('⏳ Flock age is ${ageWeeks.toStringAsFixed(1)} weeks with no egg logs yet. Check light stimulation (14-16 hrs) and crude protein intake.');
         } else {
-          adviceList.add({
-            'level': 'good',
-            'title': 'Pullet rearing phase',
-            'body':
-                'Age ${ageWeeks.toStringAsFixed(1)} weeks. Focus on frame size and steady weekly weight gain before lay.',
-          });
+          adviceList.add('🐣 Pullet Rearing Phase (${ageWeeks.toStringAsFixed(1)} wks): Focus on target skeletal frame and weekly body weight gain before egg production starts.');
         }
       }
 
-      if (_negotiatingPrice > 0 && breakEvenPerEgg > 0) {
+      if (_totalEggsCollected > 0 && _negotiatingPrice > 0) {
         if (_negotiatingPrice < breakEvenPerEgg) {
           final diff = (breakEvenPerEgg - _negotiatingPrice).toStringAsFixed(2);
-          adviceList.add({
-            'level': 'watch',
-            'title': 'Egg price margin',
-            'body':
-                'Market rate is about TK $diff/egg under cumulative break-even. Cost per egg usually falls as peak production continues.',
-          });
+          adviceList.add('⚠️ Egg Price Margin: Current market rate is TK $diff/egg below cumulative break-even. As peak production continues, cumulative cost per egg will drop.');
         } else {
-          adviceList.add({
-            'level': 'good',
-            'title': 'Shell quality care',
-            'body':
-                'Offer coarse limestone or oyster shell in late afternoon for overnight shell formation.',
-          });
+          adviceList.add('💡 Layer Care: Provide oyster shell grit / coarse limestone in late afternoon for optimal eggshell calcification during the night.');
         }
       }
-    }
-
-    if (_currentBirds <= 0) {
-      adviceList.insert(0, {
-        'level': 'urgent',
-        'title': 'No birds on hand',
-        'body':
-            'Current birds are zero after mortality and sales. Confirm records or close the batch.',
-      });
     }
 
     return adviceList;
-  }
-
-  Widget _buildFcrCard(double totalLiveWeightKg) {
-    final hasFeed = _totalFeedKg > 0;
-    final hasBiomass = totalLiveWeightKg > 0;
-    final fcr = (hasFeed && hasBiomass) ? (_totalFeedKg / totalLiveWeightKg) : null;
-
-    String status;
-    Color statusColor;
-    String detail;
-    if (fcr == null) {
-      status = 'Unavailable';
-      statusColor = _muted;
-      detail = !hasFeed
-          ? 'Log daily feed (kg) to calculate FCR.'
-          : 'Log average weight to calculate live biomass and FCR.';
-    } else if (fcr <= 1.55) {
-      status = 'Excellent';
-      statusColor = const Color(0xFF2E7D32);
-      detail = 'Feed is converting efficiently into body weight.';
-    } else if (fcr <= 1.85) {
-      status = 'Acceptable';
-      statusColor = const Color(0xFF1565C0);
-      detail = 'FCR is within a workable farm range. Watch wastage.';
-    } else {
-      status = 'High';
-      statusColor = const Color(0xFFC62828);
-      detail = 'Feed use is high vs biomass. Check spillage, disease, and feed quality.';
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _brandSoft,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.speed, color: _brand, size: 20),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Feed conversion (FCR)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Total feed ÷ live biomass',
-                      style: TextStyle(fontSize: 12, color: _muted),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            fcr == null ? '—' : fcr.toStringAsFixed(2),
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-              color: fcr == null ? _muted : _ink,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: _soft,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _miniStat('Feed', '${_totalFeedKg.toStringAsFixed(0)} kg'),
-                ),
-                Container(width: 1, height: 28, color: _line),
-                Expanded(
-                  child: _miniStat(
-                    'Biomass',
-                    hasBiomass ? '${totalLiveWeightKg.toStringAsFixed(0)} kg' : '—',
-                  ),
-                ),
-                Container(width: 1, height: 28, color: _line),
-                Expanded(
-                  child: _miniStat('Birds', '$_currentBirds'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(detail, style: const TextStyle(fontSize: 13, height: 1.35, color: _muted)),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniStat(String label, String value) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: _muted, fontWeight: FontWeight.w500)),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _ink),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStandardCompareCard() {
-    final category = (_selectedBatch?['production_category'] ?? '').toString();
-    final breed = (_selectedBatch?['breed'] ?? '').toString();
-    final productionType = (_selectedBatch?['production_type'] ?? '').toString();
-    final hasWeight = _latestAvgWeightKg > 0;
-
-    final evaluation = PoultryStandardsService.evaluate(
-      productionType: productionType,
-      productionCategory: category,
-      breed: breed,
-      ageDays: _flockAgeDays,
-      actualWeightKg: hasWeight ? _latestAvgWeightKg : 0,
-    );
-
-    final standardKg = evaluation.targetWeightGrams / 1000.0;
-    final hasStandard = evaluation.targetWeightGrams > 0;
-    final statusColor = Color(evaluation.colorHex);
-
-    String statusLabel;
-    switch (evaluation.status) {
-      case GrowthStatus.ahead:
-        statusLabel = 'Ahead';
-        break;
-      case GrowthStatus.behind:
-        statusLabel = 'Behind';
-        break;
-      case GrowthStatus.onTarget:
-        statusLabel = 'On target';
-        break;
-    }
-
-    final pctText = !hasWeight || !hasStandard
-        ? '—'
-        : '${evaluation.diffPercent >= 0 ? '+' : ''}${evaluation.diffPercent.toStringAsFixed(1)}%';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.monitor_weight_outlined, color: statusColor, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Standard vs actual',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Day $_flockAgeDays · ${evaluation.breedBenchmarkName}',
-                      style: const TextStyle(fontSize: 12, color: _muted),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  hasWeight && hasStandard ? statusLabel : 'No data',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: hasWeight && hasStandard ? statusColor : _muted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _compareBox(
-                  label: 'Standard',
-                  value: hasStandard ? '${standardKg.toStringAsFixed(2)} kg' : '—',
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _compareBox(
-                  label: 'Actual',
-                  value: hasWeight ? '${_latestAvgWeightKg.toStringAsFixed(2)} kg' : '—',
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _compareBox(
-                  label: 'Gap',
-                  value: pctText,
-                  valueColor: hasWeight && hasStandard ? statusColor : _ink,
-                ),
-              ),
-            ],
-          ),
-          if (hasWeight && hasStandard) ...[
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: (standardKg <= 0)
-                    ? 0
-                    : (_latestAvgWeightKg / standardKg).clamp(0.0, 1.3) / 1.3,
-                backgroundColor: _soft,
-                color: statusColor,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            !hasWeight
-                ? 'Log average weight to compare against the breed curve.'
-                : !hasStandard
-                    ? 'No standard curve matched this breed/category.'
-                    : evaluation.advice,
-            style: const TextStyle(fontSize: 13, height: 1.35, color: _muted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compareBox({
-    required String label,
-    required String value,
-    Color? valueColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: _soft,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: _muted, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.3,
-              color: valueColor ?? _ink,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildManagementAdviceCard({
@@ -1514,131 +1030,51 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     required double breakEvenPerKg,
     required double breakEvenPerEgg,
   }) {
-    final adviceList =
-        _generateAdviceList(isLayer, breakEvenPerKg, breakEvenPerEgg);
-
-    Color bg(String level) {
-      switch (level) {
-        case 'urgent':
-          return const Color(0xFFFFEBEE);
-        case 'watch':
-          return const Color(0xFFFFF8E8);
-        default:
-          return _brandSoft;
-      }
-    }
-
-    Color fg(String level) {
-      switch (level) {
-        case 'urgent':
-          return const Color(0xFFB71C1C);
-        case 'watch':
-          return const Color(0xFF8A6A1A);
-        default:
-          return _brand;
-      }
-    }
-
-    IconData icon(String level) {
-      switch (level) {
-        case 'urgent':
-          return Icons.error_outline;
-        case 'watch':
-          return Icons.visibility_outlined;
-        default:
-          return Icons.check_circle_outline;
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _line),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.psychology_outlined, color: _brand, size: 22),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Management advice',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: _ink,
-                    letterSpacing: -0.2,
+    final colors = context.colors;
+    final List<String> adviceList = _generateAdviceList(isLayer, breakEvenPerKg, breakEvenPerEgg);
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.psychology, color: colors.accent),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Batch Management Advice (Actuals)',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Based on recorded batch data only.',
-            style: TextStyle(fontSize: 12, color: _muted),
-          ),
-          const SizedBox(height: 14),
-          ...adviceList.map((item) {
-            final level = item['level'] ?? 'good';
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: bg(level),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(icon(level), size: 20, color: fg(level)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item['title'] ?? '',
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: fg(level),
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item['body'] ?? '',
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.35,
-                            color: fg(level).withOpacity(0.9),
-                          ),
-                        ),
-                      ],
+              ],
+            ),
+            const Divider(height: 18),
+            ...adviceList.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontSize: 13, height: 1.35),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
-          }),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
-
 }
 
 extension ColorUtils on Color {

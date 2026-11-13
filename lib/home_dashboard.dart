@@ -14,16 +14,19 @@ import 'market_price_screen.dart';
 import 'layer_performance_screen.dart';
 import 'layer_snapshot_card.dart';
 
+import 'app_colors.dart';
+
 class HomeDashboardPage extends StatelessWidget {
   const HomeDashboardPage({super.key});
 
   void _confirmLogout(BuildContext context) {
+    final colors = context.colors;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.logout, color: Colors.red),
+            Icon(Icons.logout, color: colors.error),
             SizedBox(width: 8),
             Text("Logout Confirmation"),
           ],
@@ -35,7 +38,7 @@ class HomeDashboardPage extends StatelessWidget {
             child: const Text("Cancel"),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: colors.error),
             onPressed: () {
               Navigator.pop(ctx);
               SupabaseConfig.client.auth.signOut();
@@ -49,6 +52,7 @@ class HomeDashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final user = SupabaseConfig.client.auth.currentUser;
     final farmName = user?.userMetadata?['farm_name']?.toString() ?? 'Rately Farms';
     final userName = user?.userMetadata?['name']?.toString() ?? 'Farmer';
@@ -101,7 +105,7 @@ class HomeDashboardPage extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             "Logged in as $userName",
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                            style: TextStyle(fontSize: 12, color: colors.inkAlt),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -132,14 +136,14 @@ class HomeDashboardPage extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.teal.shade800, Colors.teal.shade600],
+                    colors: [colors.accent, colors.accent],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.teal.withOpacity(0.25),
+                      color: colors.accent.withOpacity(0.25),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -150,20 +154,20 @@ class HomeDashboardPage extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: colors.onAccent.withOpacity(0.18),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.psychology, color: Colors.white, size: 28),
+                      child: Icon(Icons.psychology, color: colors.card, size: 28),
                     ),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             "AI & Batch Advisor",
                             style: TextStyle(
-                              color: Colors.white,
+                              color: colors.card,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
@@ -172,14 +176,14 @@ class HomeDashboardPage extends StatelessWidget {
                           Text(
                             "Live Break-Even, Valuation & Health Advice",
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: colors.onAccentMuted,
                               fontSize: 12,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                    Icon(Icons.arrow_forward_ios, color: colors.onAccentMuted, size: 16),
                   ],
                 ),
               ),
@@ -187,13 +191,13 @@ class HomeDashboardPage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Section 1: Batches
-            _buildSectionHeader(context, "Batches", Icons.inventory_2, Colors.teal),
+            _buildSectionHeader(context, "Batches", Icons.inventory_2, colors.accent),
             _buildGrid([
               _DashboardItem(
                 title: "Add Batch",
                 subtitle: "Create new batch",
                 icon: Icons.add_business,
-                color: Colors.teal,
+                color: colors.accent,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AddBatchPageNew()),
@@ -203,7 +207,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Batch List",
                 subtitle: "Active & closed",
                 icon: Icons.format_list_bulleted,
-                color: Colors.cyan.shade800,
+                color: colors.info,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const BatchListScreenNew()),
@@ -213,13 +217,13 @@ class HomeDashboardPage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Section 2: Daily Operations
-            _buildSectionHeader(context, "Daily Records", Icons.edit_calendar, Colors.blue.shade700),
+            _buildSectionHeader(context, "Daily Records", Icons.edit_calendar, colors.info),
             _buildGrid([
               _DashboardItem(
                 title: "Daily Record",
                 subtitle: "Feed, water, eggs",
                 icon: Icons.edit_note,
-                color: Colors.blue.shade700,
+                color: colors.info,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const DailyRecordPageNew()),
@@ -229,7 +233,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Records List",
                 subtitle: "Daily entry history",
                 icon: Icons.history,
-                color: Colors.indigo,
+                color: colors.info,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CloudDailyRecordsScreen()),
@@ -239,7 +243,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Average Weight",
                 subtitle: "Weight monitoring",
                 icon: Icons.scale,
-                color: Colors.deepPurple,
+                color: colors.purple,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AverageWeightScreen()),
@@ -249,13 +253,13 @@ class HomeDashboardPage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Section 3: Finance
-            _buildSectionHeader(context, "Finance", Icons.account_balance, Colors.green.shade800),
+            _buildSectionHeader(context, "Finance", Icons.account_balance, colors.brand),
             _buildGrid([
               _DashboardItem(
                 title: "Sales",
                 subtitle: "Birds, eggs & litter",
                 icon: Icons.point_of_sale,
-                color: Colors.green.shade700,
+                color: colors.brand,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SalesScreenV2()),
@@ -265,7 +269,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Expenses",
                 subtitle: "Feed, medicine & more",
                 icon: Icons.receipt_long,
-                color: Colors.amber.shade900,
+                color: colors.warning,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ExpenseScreenNew()),
@@ -275,7 +279,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Market Price",
                 subtitle: "Daily market rates",
                 icon: Icons.trending_up,
-                color: Colors.deepOrange,
+                color: colors.warning,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const MarketPriceScreen()),
@@ -285,13 +289,13 @@ class HomeDashboardPage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Section 4: Reports & Analytics
-            _buildSectionHeader(context, "Reports & Analytics", Icons.bar_chart, Colors.purple.shade700),
+            _buildSectionHeader(context, "Reports & Analytics", Icons.bar_chart, colors.purple),
             _buildGrid([
               _DashboardItem(
                 title: "Date Range Summary",
                 subtitle: "Periodic farm report",
                 icon: Icons.date_range,
-                color: Colors.blueGrey.shade700,
+                color: colors.inkAlt,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CloudDateRangeSummaryPage()),
@@ -301,7 +305,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: "Batch Summary",
                 subtitle: "Batch P&L & stats",
                 icon: Icons.analytics,
-                color: Colors.purple.shade700,
+                color: colors.purple,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CloudBatchSummaryPage()),
@@ -311,7 +315,7 @@ class HomeDashboardPage extends StatelessWidget {
                 title: 'Layer Performance',
                 subtitle: 'HDP and egg stats',
                 icon: Icons.egg_outlined,
-                color: Colors.amber.shade800,
+                color: colors.warning,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const LayerPerformanceScreen()),
@@ -326,6 +330,7 @@ class HomeDashboardPage extends StatelessWidget {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title, IconData icon, Color color) {
+    final colors = context.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -344,7 +349,7 @@ class HomeDashboardPage extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.grey.shade800,
+              color: colors.ink,
               letterSpacing: 0.3,
             ),
           ),
@@ -364,13 +369,14 @@ class HomeDashboardPage extends StatelessWidget {
         childAspectRatio: 1.28,
       ),
       itemCount: items.length,
-      itemBuilder: (context, index) => _buildCard(items[index]),
+      itemBuilder: (context, index) => _buildCard(context, items[index]),
     );
   }
 
-  Widget _buildCard(_DashboardItem item) {
+  Widget _buildCard(BuildContext context, _DashboardItem item) {
+    final colors = context.colors;
     return Material(
-      color: Colors.transparent,
+      color: AppColors.transparent,
       child: InkWell(
         onTap: item.onTap,
         borderRadius: BorderRadius.circular(12),
@@ -409,7 +415,7 @@ class HomeDashboardPage extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 10,
-                  color: Colors.grey.shade600,
+                  color: colors.muted,
                 ),
               ),
             ],

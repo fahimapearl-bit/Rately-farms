@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_colors.dart';
+
 class DailyRecordPageNew extends StatefulWidget {
   const DailyRecordPageNew({super.key});
 
@@ -74,8 +76,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Data load error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Data load error: $e'), backgroundColor: colors.error),
         );
       }
     } finally {
@@ -125,10 +128,11 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       });
 
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Daily Record saved to Cloud!'),
-            backgroundColor: Colors.green,
+            backgroundColor: colors.brand,
           ),
         );
         // Clear fields
@@ -141,8 +145,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Save error: $e'), backgroundColor: colors.error),
         );
       }
     } finally {
@@ -168,6 +173,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Daily Record'),
@@ -187,7 +193,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.warning_amber_rounded, size: 48, color: Colors.orange),
+                        Icon(Icons.warning_amber_rounded, size: 48, color: colors.warning),
                         const SizedBox(height: 12),
                         const Text(
                           'No Batches Found!',
@@ -310,10 +316,10 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                           child: FilledButton.icon(
                             onPressed: _isSaving ? null : _saveRecord,
                             icon: _isSaving
-                                ? const SizedBox(
+                                ? SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: colors.card),
                                   )
                                 : const Icon(Icons.cloud_upload),
                             label: Text(_isSaving ? 'Saving to Cloud...' : 'Save Daily Record'),
@@ -333,7 +339,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: DataTable(
-                                headingRowColor: MaterialStatePropertyAll(Colors.green.shade50),
+                                headingRowColor: MaterialStatePropertyAll(colors.successSoft),
                                 headingRowHeight: 40,
                                 dataRowHeight: 42,
                                 columns: const [

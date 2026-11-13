@@ -156,6 +156,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
       Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error saving batch: $e'),
@@ -276,7 +277,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [colors.brand, Color.lerp(colors.brand, Colors.teal, 0.45)!],
+          colors: [colors.brand, Color.lerp(colors.brand, colors.accent, 0.45)!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -287,16 +288,16 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.agriculture_outlined,
-                color: Colors.white,
+                color: colors.card,
                 size: 21,
               ),
               const SizedBox(width: 8),
               Text(
                 'New batch overview',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
+                  color: colors.onAccent.withOpacity(0.9),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -310,8 +311,8 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                 : nameController.text.trim(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: colors.card,
               fontSize: 21,
               fontWeight: FontWeight.bold,
             ),
@@ -320,7 +321,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           Text(
             '${productionType ?? 'Production'} • ${productionCategory ?? 'Category'}',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.82),
+              color: colors.onAccent.withOpacity(0.82),
               fontSize: 12,
             ),
           ),
@@ -345,12 +346,13 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
   }
 
   Widget _summaryMetric(String label, String value) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
+        color: colors.onAccent.withOpacity(0.14),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        border: Border.all(color: colors.onAccent.withOpacity(0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -358,15 +360,15 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.75),
+              color: colors.onAccent.withOpacity(0.75),
               fontSize: 11,
             ),
           ),
           const SizedBox(height: 3),
           Text(
             value,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: colors.card,
               fontSize: 15,
               fontWeight: FontWeight.bold,
             ),
@@ -377,6 +379,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
   }
 
   Widget _dateField() {
+    final colors = context.colors;
     final formatted =
         '${startDate.day.toString().padLeft(2, '0')}/'
         '${startDate.month.toString().padLeft(2, '0')}/${startDate.year}';
@@ -428,7 +431,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
         ),
         centerTitle: false,
         elevation: 0,
-        surfaceTintColor: Colors.transparent,
+        surfaceTintColor: AppColors.transparent,
       ),
       body: SafeArea(
         child: Form(

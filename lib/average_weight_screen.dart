@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'poultry_standards.dart';
 
+import 'app_colors.dart';
+
 class AverageWeightScreen extends StatefulWidget {
   const AverageWeightScreen({super.key});
 
@@ -78,9 +80,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading batches: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Error loading batches: $e'), backgroundColor: colors.error),
         );
       }
     }
@@ -160,10 +163,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       await _supabase.from('weekly_weights').insert(payload);
 
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Saved: ${grams.toStringAsFixed(0)} g (${weightKg.toStringAsFixed(3)} kg)'),
-            backgroundColor: const Color(0xFF1B5E20),
+            backgroundColor: colors.brand,
           ),
         );
         _weightGramsController.clear();
@@ -172,8 +176,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Failed to save: $e'), backgroundColor: colors.error),
         );
       }
     } finally {
@@ -182,6 +187,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Future<void> _deleteEntry(String id) async {
+    final colors = context.colors;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -190,7 +196,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: colors.error, foregroundColor: colors.card),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -212,8 +218,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Delete error: $e'), backgroundColor: Colors.red.shade700),
+          SnackBar(content: Text('Delete error: $e'), backgroundColor: colors.error),
         );
       }
     }
@@ -221,15 +228,16 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: colors.surfaceAlt,
       appBar: AppBar(
         title: const Text(
           'Average Weight & Growth',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFF1B5E20),
-        foregroundColor: Colors.white,
+        backgroundColor: colors.brand,
+        foregroundColor: colors.card,
         elevation: 0,
         actions: [
           IconButton(
@@ -239,11 +247,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1B5E20)))
+          ? Center(child: CircularProgressIndicator(color: colors.brand))
           : _batches.isEmpty
               ? _buildNoBatchesView()
               : RefreshIndicator(
-                  color: const Color(0xFF1B5E20),
+                  color: colors.brand,
                   onRefresh: () async {
                     if (_selectedBatch != null) await _loadWeightHistory(_selectedBatch!['id']);
                   },
@@ -271,21 +279,23 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Widget _buildNoBatchesView() {
+    final colors = context.colors;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade400),
+          Icon(Icons.inventory_2_outlined, size: 64, color: colors.hint),
           const SizedBox(height: 12),
           const Text('No Batches Found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          const Text('Please add a batch first to record average weights.', style: TextStyle(color: Colors.grey)),
+          Text('Please add a batch first to record average weights.', style: TextStyle(color: colors.muted)),
         ],
       ),
     );
   }
 
   Widget _buildBatchSelectorCard() {
+    final colors = context.colors;
     final startDateStr = _selectedBatch?['start_date']?.toString();
     DateTime? startDate;
     if (startDateStr != null) startDate = DateTime.tryParse(startDateStr);
@@ -294,11 +304,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -309,26 +319,26 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B5E20).withOpacity(0.1),
+                  color: colors.brand.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.scale, color: Color(0xFF1B5E20), size: 18),
+                child: Icon(Icons.scale, color: colors.brand, size: 18),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'SELECT BATCH',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black54, letterSpacing: 0.8),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.muted, letterSpacing: 0.8),
               ),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
+                  color: colors.brandSoft,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   'Day $ageDays',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B5E20)),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.brand),
                 ),
               ),
             ],
@@ -339,9 +349,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             isExpanded: true,
             decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.line)),
               filled: true,
-              fillColor: const Color(0xFFF9FAFB),
+              fillColor: colors.surfaceAlt,
             ),
             items: _batches.map((b) {
               final name = b['name'] ?? 'Unnamed';
@@ -373,6 +383,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Widget _buildBentoKPIGrid() {
+    final colors = context.colors;
     // 1. Calculate latest weight
     double? latestKg;
     DateTime? latestDate;
@@ -432,8 +443,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 mainValue: hasWeight ? '${latestGrams.toStringAsFixed(0)} g' : '--',
                 subtitle: hasWeight ? '(${latestKg!.toStringAsFixed(3)} kg)' : 'No records yet',
                 icon: Icons.scale_rounded,
-                accentColor: const Color(0xFF1B5E20),
-                bgColor: const Color(0xFFF1F8E9),
+                accentColor: colors.brand,
+                bgColor: colors.brandSoft,
               ),
             ),
             const SizedBox(width: 10),
@@ -444,8 +455,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 mainValue: targetGrams > 0 ? '${targetGrams.toStringAsFixed(0)} g' : '--',
                 subtitle: evaluation.breedBenchmarkName,
                 icon: Icons.flag_circle_outlined,
-                accentColor: const Color(0xFF0277BD),
-                bgColor: const Color(0xFFE1F5FE),
+                accentColor: colors.info,
+                bgColor: colors.accentSoft,
               ),
             ),
           ],
@@ -465,11 +476,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                     ? Icons.trending_up
                     : (evaluation.status == GrowthStatus.behind ? Icons.trending_down : Icons.check_circle_outline),
                 accentColor: evaluation.status == GrowthStatus.ahead
-                    ? const Color(0xFF2E7D32)
-                    : (evaluation.status == GrowthStatus.behind ? const Color(0xFFC62828) : const Color(0xFFF57F17)),
+                    ? colors.brand
+                    : (evaluation.status == GrowthStatus.behind ? colors.error : colors.warning),
                 bgColor: evaluation.status == GrowthStatus.ahead
-                    ? const Color(0xFFE8F5E9)
-                    : (evaluation.status == GrowthStatus.behind ? const Color(0xFFFFEBEE) : const Color(0xFFFFFDE7)),
+                    ? colors.brandSoft
+                    : (evaluation.status == GrowthStatus.behind ? colors.errorSoft : colors.warningSoft),
               ),
             ),
             const SizedBox(width: 10),
@@ -480,8 +491,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 mainValue: adgGrams != null ? '${adgGrams > 0 ? '+' : ''}${adgGrams.toStringAsFixed(1)} g/d' : '--',
                 subtitle: adgGrams != null ? 'Gain rate per bird' : 'Need 2+ entries',
                 icon: Icons.speed_rounded,
-                accentColor: const Color(0xFF6A1B9A),
-                bgColor: const Color(0xFFF3E5F5),
+                accentColor: colors.purple,
+                bgColor: colors.purpleSoft,
               ),
             ),
           ],
@@ -498,14 +509,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     required Color accentColor,
     required Color bgColor,
   }) {
+    final colors = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(color: colors.shadow, blurRadius: 6, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -522,7 +534,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.black54, letterSpacing: 0.5),
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: colors.muted, letterSpacing: 0.5),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -536,7 +548,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           const SizedBox(height: 3),
           Text(
             subtitle,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: colors.muted),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -546,22 +558,23 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Widget _buildGrowthChartCard() {
+    final colors = context.colors;
     if (_weightHistory.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colors.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: colors.line),
         ),
         child: Center(
           child: Column(
             children: [
-              Icon(Icons.show_chart_rounded, size: 40, color: Colors.grey.shade300),
+              Icon(Icons.show_chart_rounded, size: 40, color: colors.line),
               const SizedBox(height: 6),
               const Text('Weight Growth Chart', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 2),
-              Text('Log at least 1 record to see the growth trajectory graph.', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+              Text('Log at least 1 record to see the growth trajectory graph.', style: TextStyle(color: colors.muted, fontSize: 11)),
             ],
           ),
         ),
@@ -603,12 +616,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     targetPoints.sort((a, b) => a.date.compareTo(b.date));
 
     if (actualPoints.isEmpty) {
+      final colors = context.colors;
       return Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: colors.card,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: colors.line),
         ),
         child: const Center(
           child: Text('Valid start date and weight records are required.'),
@@ -619,11 +633,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -634,15 +648,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B5E20).withOpacity(0.1),
+                  color: colors.brand.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.show_chart_rounded, color: Color(0xFF1B5E20), size: 16),
+                child: Icon(Icons.show_chart_rounded, color: colors.brand, size: 16),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'GROWTH CURVE (ACTUAL vs TARGET)',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: 0.5),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -650,9 +664,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           // Legend
           Row(
             children: [
-              _buildLegendItem('Actual Weight', const Color(0xFF1B5E20), isDashed: false),
+              _buildLegendItem('Actual Weight', colors.brand, isDashed: false),
               const SizedBox(width: 14),
-              _buildLegendItem('Breed Target', const Color(0xFF0277BD), isDashed: true),
+              _buildLegendItem('Breed Target', colors.info, isDashed: true),
             ],
           ),
           const SizedBox(height: 14),
@@ -664,6 +678,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               painter: WeightCurvePainter(
                 actualPoints: actualPoints,
                 targetPoints: targetPoints,
+                colors: colors,
               ),
             ),
           ),
@@ -673,6 +688,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Widget _buildLegendItem(String label, Color color, {required bool isDashed}) {
+    final colors = context.colors;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -683,24 +699,25 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         const SizedBox(width: 5),
         Text(
           label,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.inkAlt),
         ),
       ],
     );
   }
 
   Widget _buildNewEntryCard() {
+    final colors = context.colors;
     final gramsVal = double.tryParse(_weightGramsController.text.trim()) ?? 0;
     final kgPreview = gramsVal > 0 ? (gramsVal / 1000.0).toStringAsFixed(3) : '0.000';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -711,27 +728,27 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1B5E20).withOpacity(0.1),
+                  color: colors.brand.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.add_circle_outline, color: Color(0xFF1B5E20), size: 16),
+                child: Icon(Icons.add_circle_outline, color: colors.brand, size: 16),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'LOG NEW AVERAGE WEIGHT',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: 0.5),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
               ),
               const Spacer(),
               if (gramsVal > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
+                    color: colors.brandSoft,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '= $kgPreview kg',
-                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF1B5E20)),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.brand),
                   ),
                 ),
             ],
@@ -756,13 +773,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: colors.line),
                       borderRadius: BorderRadius.circular(10),
-                      color: const Color(0xFFF9FAFB),
+                      color: colors.surfaceAlt,
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_today, size: 15, color: Color(0xFF1B5E20)),
+                        Icon(Icons.calendar_today, size: 15, color: colors.brand),
                         const SizedBox(width: 8),
                         Text(
                           _displayFormat.format(_entryDate),
@@ -781,11 +798,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Sample Birds',
-                    labelStyle: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    labelStyle: TextStyle(fontSize: 12, color: colors.inkAlt),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                     filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
+                    fillColor: colors.surfaceAlt,
                   ),
                 ),
               ),
@@ -800,13 +817,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             decoration: InputDecoration(
               labelText: 'Average Weight (in Grams)*',
               hintText: 'e.g. 450, 850, 1200',
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1B5E20)),
+              labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.brand),
               suffixText: 'grams',
-              suffixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20)),
+              suffixStyle: TextStyle(fontWeight: FontWeight.bold, color: colors.brand),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               filled: true,
-              fillColor: const Color(0xFFF9FAFB),
+              fillColor: colors.surfaceAlt,
             ),
           ),
           const SizedBox(height: 10),
@@ -816,11 +833,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             decoration: InputDecoration(
               labelText: 'Remarks / Notes (optional)',
               hintText: 'e.g. Cobb 500, Uniformity good',
-              labelStyle: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              labelStyle: TextStyle(fontSize: 12, color: colors.inkAlt),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
               filled: true,
-              fillColor: const Color(0xFFF9FAFB),
+              fillColor: colors.surfaceAlt,
             ),
           ),
           const SizedBox(height: 12),
@@ -829,8 +846,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             height: 44,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1B5E20),
-                foregroundColor: Colors.white,
+                backgroundColor: colors.brand,
+                foregroundColor: colors.card,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -838,7 +855,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               ),
               onPressed: _isSaving ? null : _saveWeightEntry,
               icon: _isSaving
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.card))
                   : const Icon(Icons.cloud_upload_outlined, size: 18),
               label: Text(
                 _isSaving ? 'Saving...' : 'Save Average Weight',
@@ -852,6 +869,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   Widget _buildHistoryList() {
+    final colors = context.colors;
     final reversed = _weightHistory.reversed.toList();
     final startDateStr = _selectedBatch?['start_date']?.toString();
     DateTime? startDate;
@@ -860,11 +878,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -875,20 +893,20 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.blueGrey.withOpacity(0.1),
+                  color: colors.inkAlt.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.history, color: Colors.blueGrey, size: 16),
+                child: Icon(Icons.history, color: colors.inkAlt, size: 16),
               ),
               const SizedBox(width: 8),
-              const Text(
+              Text(
                 'WEIGHT LOG HISTORY',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black87, letterSpacing: 0.5),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
               ),
               const Spacer(),
               Text(
                 '${reversed.length} records',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, color: colors.muted, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -897,7 +915,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text('No weigh-in logs recorded yet.', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                child: Text('No weigh-in logs recorded yet.', style: TextStyle(color: colors.muted, fontSize: 12)),
               ),
             )
           else
@@ -905,7 +923,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: reversed.length,
-              separatorBuilder: (ctx, i) => Divider(height: 1, color: Colors.grey.shade200),
+              separatorBuilder: (ctx, i) => Divider(height: 1, color: colors.line),
               itemBuilder: (ctx, idx) {
                 final row = reversed[idx];
                 final id = row['id']?.toString() ?? '';
@@ -924,19 +942,19 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F8E9),
+                          color: colors.brandSoft,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFC8E6C9)),
+                          border: Border.all(color: colors.brandSoft),
                         ),
                         child: Column(
                           children: [
                             Text(
                               age != null ? 'Day $age' : 'Log',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF1B5E20)),
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.brand),
                             ),
                             Text(
                               dateObj != null ? DateFormat('dd/MM').format(dateObj) : '',
-                              style: TextStyle(fontSize: 9, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                              style: TextStyle(fontSize: 9, color: colors.inkAlt, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -950,19 +968,19 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                               children: [
                                 Text(
                                   '${grams.toStringAsFixed(0)} g',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black87),
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: colors.ink),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   '(${kg.toStringAsFixed(3)} kg)',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.muted),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Sample: $sample birds${remarks != null && remarks.isNotEmpty ? ' • $remarks' : ''}',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                              style: TextStyle(fontSize: 11, color: colors.muted),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -970,7 +988,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                        icon: Icon(Icons.delete_outline, size: 18, color: colors.error),
                         onPressed: id.isNotEmpty ? () => _deleteEntry(id) : null,
                       ),
                     ],
@@ -1034,9 +1052,13 @@ class WeightCurvePainter extends CustomPainter {
   final List<ChartPoint> actualPoints;
   final List<ChartPoint> targetPoints;
 
+  /// Palette handed in by the widget: a CustomPainter has no BuildContext.
+  final AppColors colors;
+
   WeightCurvePainter({
     required this.actualPoints,
     required this.targetPoints,
+    required this.colors,
   });
 
   @override
@@ -1067,7 +1089,7 @@ class WeightCurvePainter extends CustomPainter {
 
     // Grid lines
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = colors.line
       ..strokeWidth = 1;
 
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
@@ -1081,7 +1103,7 @@ class WeightCurvePainter extends CustomPainter {
       final val = maxGrams - (maxGrams / gridCount) * i;
       textPainter.text = TextSpan(
         text: '${val.toInt()}g',
-        style: TextStyle(fontSize: 9, color: Colors.grey.shade500, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 9, color: colors.muted, fontWeight: FontWeight.w500),
       );
       textPainter.layout();
       textPainter.paint(canvas, Offset(margin.left - textPainter.width - 4, y - 6));
@@ -1101,7 +1123,7 @@ class WeightCurvePainter extends CustomPainter {
     // 1. Draw Target Line (Dotted / Dashed Blue)
     if (targetPoints.length >= 2) {
       final targetPaint = Paint()
-        ..color = const Color(0xFF0277BD).withOpacity(0.85)
+        ..color = colors.info.withOpacity(0.85)
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke;
 
@@ -1115,17 +1137,17 @@ class WeightCurvePainter extends CustomPainter {
 
     // 2. Draw Actual Line (Smooth Solid Green)
     final actualPaint = Paint()
-      ..color = const Color(0xFF1B5E20)
+      ..color = colors.brand
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final actualDotPaint = Paint()
-      ..color = const Color(0xFF1B5E20)
+      ..color = colors.brand
       ..style = PaintingStyle.fill;
 
     final actualDotBorder = Paint()
-      ..color = Colors.white
+      ..color = colors.card
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
@@ -1155,7 +1177,7 @@ class WeightCurvePainter extends CustomPainter {
       final x = getX(pt.age);
       textPainter.text = TextSpan(
         text: 'D${pt.age}',
-        style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black54),
+        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colors.muted),
       );
       textPainter.layout();
       textPainter.paint(canvas, Offset(x - textPainter.width / 2, size.height - 14));
@@ -1164,6 +1186,8 @@ class WeightCurvePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant WeightCurvePainter oldDelegate) {
-    return oldDelegate.actualPoints != actualPoints || oldDelegate.targetPoints != targetPoints;
+    return oldDelegate.actualPoints != actualPoints ||
+        oldDelegate.targetPoints != targetPoints ||
+        oldDelegate.colors != colors;
   }
 }
