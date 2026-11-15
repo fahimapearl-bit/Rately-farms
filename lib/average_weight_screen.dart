@@ -1,13 +1,18 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+
 import 'poultry_standards.dart';
 
 import 'app_colors.dart';
 
 class AverageWeightScreen extends StatefulWidget {
-  const AverageWeightScreen({super.key});
+  /// Opens directly on this batch (passed from the Daily Records screen).
+  final String? initialBatchId;
+
+  const AverageWeightScreen({super.key, this.initialBatchId});
 
   @override
   State<AverageWeightScreen> createState() => _AverageWeightScreenState();
@@ -26,7 +31,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   // Form Controllers
   DateTime _entryDate = DateTime.now();
   final TextEditingController _weightGramsController = TextEditingController();
-  final TextEditingController _sampleCountController = TextEditingController(text: '10');
+  final TextEditingController _sampleCountController = TextEditingController(
+    text: '10',
+  );
   final TextEditingController _remarksController = TextEditingController();
 
   // History weights
@@ -57,19 +64,36 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
       final data = await _supabase
           .from('batches')
-          .select('id, name, start_date, production_type, production_category, breed, status')
+          .select(
+            'id, name, start_date, production_type, production_category, breed, status',
+          )
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
 
-      final List<Map<String, dynamic>> list = List<Map<String, dynamic>>.from(data);
+      final List<Map<String, dynamic>> list = List<Map<String, dynamic>>.from(
+        data,
+      );
       if (mounted) {
         setState(() {
           _batches = list;
           // Prefer active batch first
-          _selectedBatch = list.firstWhere(
-            (b) => (b['status'] ?? 'Active').toString().toLowerCase() == 'active',
-            orElse: () => list.isNotEmpty ? list.first : {},
-          );
+          Map<String, dynamic> preferred = {};
+          if (widget.initialBatchId != null) {
+            for (final b in list) {
+              if (b['id'].toString() == widget.initialBatchId) {
+                preferred = b;
+                break;
+              }
+            }
+          }
+          _selectedBatch = preferred.isNotEmpty
+              ? preferred
+              : list.firstWhere(
+                  (b) =>
+                      (b['status'] ?? 'Active').toString().toLowerCase() ==
+                      'active',
+                  orElse: () => list.isNotEmpty ? list.first : {},
+                );
           if (_selectedBatch!.isEmpty) _selectedBatch = null;
           _isLoading = false;
         });
@@ -83,7 +107,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         final colors = context.colors;
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading batches: $e'), backgroundColor: colors.error),
+          SnackBar(
+            content: Text('Error loading batches: $e'),
+            backgroundColor: colors.error,
+          ),
         );
       }
     }
@@ -143,9 +170,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     final user = _supabase.auth.currentUser;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User not authenticated')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User not authenticated')));
       return;
     }
 
@@ -157,7 +184,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         'weight_date': _dateFormat.format(_entryDate),
         'sample_count': sampleCount,
         'average_weight_kg': double.parse(weightKg.toStringAsFixed(3)),
-        'remarks': _remarksController.text.trim().isEmpty ? null : _remarksController.text.trim(),
+        'remarks': _remarksController.text.trim().isEmpty
+            ? null
+            : _remarksController.text.trim(),
       };
 
       await _supabase.from('weekly_weights').insert(payload);
@@ -166,7 +195,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Saved: ${grams.toStringAsFixed(0)} g (${weightKg.toStringAsFixed(3)} kg)'),
+            content: Text(
+              'Saved: ${grams.toStringAsFixed(0)} g (${weightKg.toStringAsFixed(3)} kg)',
+            ),
             backgroundColor: colors.brand,
           ),
         );
@@ -178,7 +209,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       if (mounted) {
         final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e'), backgroundColor: colors.error),
+          SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: colors.error,
+          ),
         );
       }
     } finally {
@@ -192,11 +226,19 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Weight Record?'),
-        content: const Text('This will remove the selected weight entry permanently.'),
+        content: const Text(
+          'This will remove the selected weight entry permanently.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: colors.error, foregroundColor: colors.card),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.error,
+              foregroundColor: colors.card,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),
@@ -212,15 +254,17 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         _loadWeightHistory(_selectedBatch!['id']);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Record deleted')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Record deleted')));
       }
     } catch (e) {
       if (mounted) {
         final colors = context.colors;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Delete error: $e'), backgroundColor: colors.error),
+          SnackBar(
+            content: Text('Delete error: $e'),
+            backgroundColor: colors.error,
+          ),
         );
       }
     }
@@ -242,39 +286,45 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _selectedBatch != null ? () => _loadWeightHistory(_selectedBatch!['id']) : null,
+            onPressed: _selectedBatch != null
+                ? () => _loadWeightHistory(_selectedBatch!['id'])
+                : null,
           ),
         ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: colors.brand))
           : _batches.isEmpty
-              ? _buildNoBatchesView()
-              : RefreshIndicator(
-                  color: colors.brand,
-                  onRefresh: () async {
-                    if (_selectedBatch != null) await _loadWeightHistory(_selectedBatch!['id']);
-                  },
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildBatchSelectorCard(),
-                        const SizedBox(height: 12),
-                        _buildBentoKPIGrid(),
-                        const SizedBox(height: 14),
-                        _buildGrowthChartCard(),
-                        const SizedBox(height: 14),
-                        _buildNewEntryCard(),
-                        const SizedBox(height: 14),
-                        _buildHistoryList(),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
+          ? _buildNoBatchesView()
+          : RefreshIndicator(
+              color: colors.brand,
+              onRefresh: () async {
+                if (_selectedBatch != null)
+                  await _loadWeightHistory(_selectedBatch!['id']);
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildBatchSelectorCard(),
+                    const SizedBox(height: 12),
+                    _buildBentoKPIGrid(),
+                    const SizedBox(height: 14),
+                    _buildGrowthChartCard(),
+                    const SizedBox(height: 14),
+                    _buildNewEntryCard(),
+                    const SizedBox(height: 14),
+                    _buildHistoryList(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 
@@ -286,9 +336,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         children: [
           Icon(Icons.inventory_2_outlined, size: 64, color: colors.hint),
           const SizedBox(height: 12),
-          const Text('No Batches Found', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'No Batches Found',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 6),
-          Text('Please add a batch first to record average weights.', style: TextStyle(color: colors.muted)),
+          Text(
+            'Please add a batch first to record average weights.',
+            style: TextStyle(color: colors.muted),
+          ),
         ],
       ),
     );
@@ -299,7 +355,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     final startDateStr = _selectedBatch?['start_date']?.toString();
     DateTime? startDate;
     if (startDateStr != null) startDate = DateTime.tryParse(startDateStr);
-    final ageDays = startDate != null ? _calculateAgeDays(startDate, DateTime.now()) : 0;
+    final ageDays = startDate != null
+        ? _calculateAgeDays(startDate, DateTime.now())
+        : 0;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -308,7 +366,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -327,7 +389,12 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               const SizedBox(width: 8),
               Text(
                 'SELECT BATCH',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.muted, letterSpacing: 0.8),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: colors.muted,
+                  letterSpacing: 0.8,
+                ),
               ),
               const Spacer(),
               Container(
@@ -338,7 +405,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 ),
                 child: Text(
                   'Day $ageDays',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.brand),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: colors.brand,
+                  ),
                 ),
               ),
             ],
@@ -348,8 +419,14 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             value: _selectedBatch?['id'],
             isExpanded: true,
             decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: colors.line)),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.line),
+              ),
               filled: true,
               fillColor: colors.surfaceAlt,
             ),
@@ -362,7 +439,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                 value: b['id'],
                 child: Text(
                   '$name ($type - $breed) • $status',
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               );
@@ -400,7 +480,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     if (startDateStr != null) startDate = DateTime.tryParse(startDateStr);
     final int currentAgeDays = (startDate != null && latestDate != null)
         ? _calculateAgeDays(startDate, latestDate)
-        : (startDate != null ? _calculateAgeDays(startDate, DateTime.now()) : 0);
+        : (startDate != null
+              ? _calculateAgeDays(startDate, DateTime.now())
+              : 0);
 
     // 2. Standards evaluation
     final evaluation = PoultryStandardsService.evaluate(
@@ -416,8 +498,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
     if (_weightHistory.length >= 2) {
       final last = _weightHistory.last;
       final prev = _weightHistory[_weightHistory.length - 2];
-      final wLastKg = double.tryParse(last['average_weight_kg']?.toString() ?? '0') ?? 0;
-      final wPrevKg = double.tryParse(prev['average_weight_kg']?.toString() ?? '0') ?? 0;
+      final wLastKg =
+          double.tryParse(last['average_weight_kg']?.toString() ?? '0') ?? 0;
+      final wPrevKg =
+          double.tryParse(prev['average_weight_kg']?.toString() ?? '0') ?? 0;
       final dLast = DateTime.tryParse(last['weight_date'].toString());
       final dPrev = DateTime.tryParse(prev['weight_date'].toString());
       if (dLast != null && dPrev != null) {
@@ -440,8 +524,12 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Expanded(
               child: _buildKPICard(
                 title: 'LATEST WEIGHT',
-                mainValue: hasWeight ? '${latestGrams.toStringAsFixed(0)} g' : '--',
-                subtitle: hasWeight ? '(${latestKg!.toStringAsFixed(3)} kg)' : 'No records yet',
+                mainValue: hasWeight
+                    ? '${latestGrams.toStringAsFixed(0)} g'
+                    : '--',
+                subtitle: hasWeight
+                    ? '(${latestKg!.toStringAsFixed(3)} kg)'
+                    : 'No records yet',
                 icon: Icons.scale_rounded,
                 accentColor: colors.brand,
                 bgColor: colors.brandSoft,
@@ -452,7 +540,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Expanded(
               child: _buildKPICard(
                 title: 'TARGET (DAY $currentAgeDays)',
-                mainValue: targetGrams > 0 ? '${targetGrams.toStringAsFixed(0)} g' : '--',
+                mainValue: targetGrams > 0
+                    ? '${targetGrams.toStringAsFixed(0)} g'
+                    : '--',
                 subtitle: evaluation.breedBenchmarkName,
                 icon: Icons.flag_circle_outlined,
                 accentColor: colors.info,
@@ -468,19 +558,29 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Expanded(
               child: _buildKPICard(
                 title: 'VARIANCE',
-                mainValue: hasWeight ? '${evaluation.diffPercent > 0 ? '+' : ''}${evaluation.diffPercent.toStringAsFixed(1)}%' : '--',
+                mainValue: hasWeight
+                    ? '${evaluation.diffPercent > 0 ? '+' : ''}${evaluation.diffPercent.toStringAsFixed(1)}%'
+                    : '--',
                 subtitle: hasWeight
-                    ? (evaluation.diffGrams >= 0 ? '+${evaluation.diffGrams.toStringAsFixed(0)} g ahead' : '${evaluation.diffGrams.toStringAsFixed(0)} g behind')
+                    ? (evaluation.diffGrams >= 0
+                          ? '+${evaluation.diffGrams.toStringAsFixed(0)} g ahead'
+                          : '${evaluation.diffGrams.toStringAsFixed(0)} g behind')
                     : 'Awaiting weigh-in',
                 icon: evaluation.status == GrowthStatus.ahead
                     ? Icons.trending_up
-                    : (evaluation.status == GrowthStatus.behind ? Icons.trending_down : Icons.check_circle_outline),
+                    : (evaluation.status == GrowthStatus.behind
+                          ? Icons.trending_down
+                          : Icons.check_circle_outline),
                 accentColor: evaluation.status == GrowthStatus.ahead
                     ? colors.brand
-                    : (evaluation.status == GrowthStatus.behind ? colors.error : colors.warning),
+                    : (evaluation.status == GrowthStatus.behind
+                          ? colors.error
+                          : colors.warning),
                 bgColor: evaluation.status == GrowthStatus.ahead
                     ? colors.brandSoft
-                    : (evaluation.status == GrowthStatus.behind ? colors.errorSoft : colors.warningSoft),
+                    : (evaluation.status == GrowthStatus.behind
+                          ? colors.errorSoft
+                          : colors.warningSoft),
               ),
             ),
             const SizedBox(width: 10),
@@ -488,8 +588,12 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Expanded(
               child: _buildKPICard(
                 title: 'DAILY GAIN (ADG)',
-                mainValue: adgGrams != null ? '${adgGrams > 0 ? '+' : ''}${adgGrams.toStringAsFixed(1)} g/d' : '--',
-                subtitle: adgGrams != null ? 'Gain rate per bird' : 'Need 2+ entries',
+                mainValue: adgGrams != null
+                    ? '${adgGrams > 0 ? '+' : ''}${adgGrams.toStringAsFixed(1)} g/d'
+                    : '--',
+                subtitle: adgGrams != null
+                    ? 'Gain rate per bird'
+                    : 'Need 2+ entries',
                 icon: Icons.speed_rounded,
                 accentColor: colors.purple,
                 bgColor: colors.purpleSoft,
@@ -517,7 +621,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: colors.shadow, blurRadius: 6, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -527,14 +635,22 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(6),
+                ),
                 child: Icon(icon, color: accentColor, size: 14),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: colors.muted, letterSpacing: 0.5),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: colors.muted,
+                    letterSpacing: 0.5,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -543,12 +659,20 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           const SizedBox(height: 8),
           Text(
             mainValue,
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: accentColor),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: accentColor,
+            ),
           ),
           const SizedBox(height: 3),
           Text(
             subtitle,
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: colors.muted),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: colors.muted,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -572,9 +696,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             children: [
               Icon(Icons.show_chart_rounded, size: 40, color: colors.line),
               const SizedBox(height: 6),
-              const Text('Weight Growth Chart', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                'Weight Growth Chart',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 2),
-              Text('Log at least 1 record to see the growth trajectory graph.', style: TextStyle(color: colors.muted, fontSize: 11)),
+              Text(
+                'Log at least 1 record to see the growth trajectory graph.',
+                style: TextStyle(color: colors.muted, fontSize: 11),
+              ),
             ],
           ),
         ),
@@ -591,7 +721,8 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
 
     for (var row in _weightHistory) {
       final dateStr = row['weight_date']?.toString();
-      final kg = double.tryParse(row['average_weight_kg']?.toString() ?? '0') ?? 0;
+      final kg =
+          double.tryParse(row['average_weight_kg']?.toString() ?? '0') ?? 0;
       if (dateStr != null && kg > 0) {
         final d = DateTime.tryParse(dateStr);
         if (d != null && startDate != null) {
@@ -602,12 +733,15 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           // Get target standard for this age
           final ev = PoultryStandardsService.evaluate(
             productionType: _selectedBatch?['production_type']?.toString(),
-            productionCategory: _selectedBatch?['production_category']?.toString(),
+            productionCategory: _selectedBatch?['production_category']
+                ?.toString(),
             breed: _selectedBatch?['breed']?.toString(),
             ageDays: age,
             actualWeightKg: kg,
           );
-          targetPoints.add(ChartPoint(age: age, grams: ev.targetWeightGrams, date: d));
+          targetPoints.add(
+            ChartPoint(age: age, grams: ev.targetWeightGrams, date: d),
+          );
         }
       }
     }
@@ -637,7 +771,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -651,12 +789,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   color: colors.brand.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.show_chart_rounded, color: colors.brand, size: 16),
+                child: Icon(
+                  Icons.show_chart_rounded,
+                  color: colors.brand,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
                 'GROWTH CURVE (ACTUAL vs TARGET)',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: colors.ink,
+                  letterSpacing: 0.5,
+                ),
               ),
             ],
           ),
@@ -699,7 +846,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         const SizedBox(width: 5),
         Text(
           label,
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.inkAlt),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: colors.inkAlt,
+          ),
         ),
       ],
     );
@@ -708,7 +859,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   Widget _buildNewEntryCard() {
     final colors = context.colors;
     final gramsVal = double.tryParse(_weightGramsController.text.trim()) ?? 0;
-    final kgPreview = gramsVal > 0 ? (gramsVal / 1000.0).toStringAsFixed(3) : '0.000';
+    final kgPreview = gramsVal > 0
+        ? (gramsVal / 1000.0).toStringAsFixed(3)
+        : '0.000';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -717,7 +870,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -731,24 +888,40 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   color: colors.brand.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.add_circle_outline, color: colors.brand, size: 16),
+                child: Icon(
+                  Icons.add_circle_outline,
+                  color: colors.brand,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
                 'LOG NEW AVERAGE WEIGHT',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: colors.ink,
+                  letterSpacing: 0.5,
+                ),
               ),
               const Spacer(),
               if (gramsVal > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: colors.brandSoft,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '= $kgPreview kg',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.brand),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: colors.brand,
+                    ),
                   ),
                 ),
             ],
@@ -771,7 +944,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 11,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: colors.line),
                       borderRadius: BorderRadius.circular(10),
@@ -779,11 +955,18 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today, size: 15, color: colors.brand),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 15,
+                          color: colors.brand,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           _displayFormat.format(_entryDate),
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -799,8 +982,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   decoration: InputDecoration(
                     labelText: 'Sample Birds',
                     labelStyle: TextStyle(fontSize: 12, color: colors.inkAlt),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     filled: true,
                     fillColor: colors.surfaceAlt,
                   ),
@@ -817,11 +1005,23 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             decoration: InputDecoration(
               labelText: 'Average Weight (in Grams)*',
               hintText: 'e.g. 450, 850, 1200',
-              labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.brand),
+              labelStyle: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: colors.brand,
+              ),
               suffixText: 'grams',
-              suffixStyle: TextStyle(fontWeight: FontWeight.bold, color: colors.brand),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              suffixStyle: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: colors.brand,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               filled: true,
               fillColor: colors.surfaceAlt,
             ),
@@ -834,8 +1034,13 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               labelText: 'Remarks / Notes (optional)',
               hintText: 'e.g. Cobb 500, Uniformity good',
               labelStyle: TextStyle(fontSize: 12, color: colors.inkAlt),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               filled: true,
               fillColor: colors.surfaceAlt,
             ),
@@ -855,11 +1060,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               ),
               onPressed: _isSaving ? null : _saveWeightEntry,
               icon: _isSaving
-                  ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.card))
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.card,
+                      ),
+                    )
                   : const Icon(Icons.cloud_upload_outlined, size: 18),
               label: Text(
                 _isSaving ? 'Saving...' : 'Save Average Weight',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -882,7 +1097,11 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: colors.line),
         boxShadow: [
-          BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(
+            color: colors.shadow,
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
         ],
       ),
       child: Column(
@@ -901,12 +1120,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               const SizedBox(width: 8),
               Text(
                 'WEIGHT LOG HISTORY',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.ink, letterSpacing: 0.5),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: colors.ink,
+                  letterSpacing: 0.5,
+                ),
               ),
               const Spacer(),
               Text(
                 '${reversed.length} records',
-                style: TextStyle(fontSize: 11, color: colors.muted, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: colors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -915,7 +1143,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text('No weigh-in logs recorded yet.', style: TextStyle(color: colors.muted, fontSize: 12)),
+                child: Text(
+                  'No weigh-in logs recorded yet.',
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
               ),
             )
           else
@@ -923,14 +1154,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: reversed.length,
-              separatorBuilder: (ctx, i) => Divider(height: 1, color: colors.line),
+              separatorBuilder: (ctx, i) =>
+                  Divider(height: 1, color: colors.line),
               itemBuilder: (ctx, idx) {
                 final row = reversed[idx];
                 final id = row['id']?.toString() ?? '';
                 final dateStr = row['weight_date']?.toString() ?? '';
                 final dateObj = DateTime.tryParse(dateStr);
-                final age = (dateObj != null && startDate != null) ? _calculateAgeDays(startDate, dateObj) : null;
-                final kg = double.tryParse(row['average_weight_kg']?.toString() ?? '0') ?? 0;
+                final age = (dateObj != null && startDate != null)
+                    ? _calculateAgeDays(startDate, dateObj)
+                    : null;
+                final kg =
+                    double.tryParse(
+                      row['average_weight_kg']?.toString() ?? '0',
+                    ) ??
+                    0;
                 final grams = kg * 1000.0;
                 final sample = row['sample_count'] ?? 1;
                 final remarks = row['remarks']?.toString();
@@ -940,7 +1178,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: colors.brandSoft,
                           borderRadius: BorderRadius.circular(8),
@@ -950,11 +1191,21 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                           children: [
                             Text(
                               age != null ? 'Day $age' : 'Log',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: colors.brand),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: colors.brand,
+                              ),
                             ),
                             Text(
-                              dateObj != null ? DateFormat('dd/MM').format(dateObj) : '',
-                              style: TextStyle(fontSize: 9, color: colors.inkAlt, fontWeight: FontWeight.w500),
+                              dateObj != null
+                                  ? DateFormat('dd/MM').format(dateObj)
+                                  : '',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: colors.inkAlt,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
                         ),
@@ -968,19 +1219,30 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                               children: [
                                 Text(
                                   '${grams.toStringAsFixed(0)} g',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: colors.ink),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.ink,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   '(${kg.toStringAsFixed(3)} kg)',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.muted),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.muted,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 2),
                             Text(
                               'Sample: $sample birds${remarks != null && remarks.isNotEmpty ? ' • $remarks' : ''}',
-                              style: TextStyle(fontSize: 11, color: colors.muted),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colors.muted,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -988,8 +1250,14 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline, size: 18, color: colors.error),
-                        onPressed: id.isNotEmpty ? () => _deleteEntry(id) : null,
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: colors.error,
+                        ),
+                        onPressed: id.isNotEmpty
+                            ? () => _deleteEntry(id)
+                            : null,
                       ),
                     ],
                   ),
@@ -1065,7 +1333,12 @@ class WeightCurvePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (actualPoints.isEmpty) return;
 
-    final margin = const EdgeInsets.only(left: 32, right: 14, top: 12, bottom: 24);
+    final margin = const EdgeInsets.only(
+      left: 32,
+      right: 14,
+      top: 12,
+      bottom: 24,
+    );
     final chartWidth = size.width - margin.left - margin.right;
     final chartHeight = size.height - margin.top - margin.bottom;
 
@@ -1098,15 +1371,26 @@ class WeightCurvePainter extends CustomPainter {
     const gridCount = 3;
     for (int i = 0; i <= gridCount; i++) {
       final y = margin.top + (chartHeight / gridCount) * i;
-      canvas.drawLine(Offset(margin.left, y), Offset(margin.left + chartWidth, y), gridPaint);
+      canvas.drawLine(
+        Offset(margin.left, y),
+        Offset(margin.left + chartWidth, y),
+        gridPaint,
+      );
 
       final val = maxGrams - (maxGrams / gridCount) * i;
       textPainter.text = TextSpan(
         text: '${val.toInt()}g',
-        style: TextStyle(fontSize: 9, color: colors.muted, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          fontSize: 9,
+          color: colors.muted,
+          fontWeight: FontWeight.w500,
+        ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(margin.left - textPainter.width - 4, y - 6));
+      textPainter.paint(
+        canvas,
+        Offset(margin.left - textPainter.width - 4, y - 6),
+      );
     }
 
     // Helper functions for mapping coordinates
@@ -1128,9 +1412,15 @@ class WeightCurvePainter extends CustomPainter {
         ..style = PaintingStyle.stroke;
 
       final targetPath = Path();
-      targetPath.moveTo(getX(targetPoints.first.age), getY(targetPoints.first.grams));
+      targetPath.moveTo(
+        getX(targetPoints.first.age),
+        getY(targetPoints.first.grams),
+      );
       for (int i = 1; i < targetPoints.length; i++) {
-        targetPath.lineTo(getX(targetPoints[i].age), getY(targetPoints[i].grams));
+        targetPath.lineTo(
+          getX(targetPoints[i].age),
+          getY(targetPoints[i].grams),
+        );
       }
       canvas.drawPath(targetPath, targetPaint);
     }
@@ -1177,10 +1467,17 @@ class WeightCurvePainter extends CustomPainter {
       final x = getX(pt.age);
       textPainter.text = TextSpan(
         text: 'D${pt.age}',
-        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colors.muted),
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: colors.muted,
+        ),
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(x - textPainter.width / 2, size.height - 14));
+      textPainter.paint(
+        canvas,
+        Offset(x - textPainter.width / 2, size.height - 14),
+      );
     }
   }
 

@@ -16,9 +16,19 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   final _amount = TextEditingController();
   final _remarks = TextEditingController();
 
+  /// Batch-level / one-off costs ONLY.
+  ///
+  /// Feed, medicine, vaccine, labour, electricity and transport are applied
+  /// *inside* the batch from the Daily Records screen (quantity x unit price),
+  /// so they must not be booked here as well — otherwise the same taka would
+  /// be counted twice in the batch cumulative cost. DOC price is already part
+  /// of the batch (chick_price x initial_birds), so it is not offered either.
   static const types = [
-    'Feed', 'Medicine', 'Vaccine', 'Litter', 'Labour',
-    'Electricity', 'Transport', 'Equipment', 'Other'
+    'Litter / Bedding',
+    'Equipment',
+    'Vet Visit',
+    'License / Misc',
+    'Other (batch level)',
   ];
 
   List<Map<String, dynamic>> batches = [];
@@ -29,12 +39,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   bool loading = true, saving = false;
 
   InputDecoration _dec(String label, {IconData? icon}) => InputDecoration(
-        labelText: label,
-        prefixIcon: icon == null ? null : Icon(icon, size: 20),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: const OutlineInputBorder(),
-      );
+    labelText: label,
+    prefixIcon: icon == null ? null : Icon(icon, size: 20),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    border: const OutlineInputBorder(),
+  );
 
   @override
   void initState() {
@@ -53,8 +63,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   void _msg(String t, {bool error = false}) {
     final colors = context.colors;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t), backgroundColor: error ? colors.error : colors.brand));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(t),
+        backgroundColor: error ? colors.error : colors.brand,
+      ),
+    );
   }
 
   Future<void> _loadBatches() async {
@@ -63,7 +77,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     try {
       final rows = await client
           .from('batches')
-          .select('id, name, production_type, production_category, initial_birds, chick_price, status')
+          .select(
+            'id, name, production_type, production_category, initial_birds, chick_price, status',
+          )
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
       batches = List<Map<String, dynamic>>.from(rows)
@@ -84,7 +100,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         .select()
         .eq('batch_id', batchId!)
         .order('expense_date', ascending: false);
-    if (mounted) setState(() => expenses = List<Map<String, dynamic>>.from(rows));
+    if (mounted)
+      setState(() => expenses = List<Map<String, dynamic>>.from(rows));
   }
 
   Map<String, dynamic>? get batch =>
@@ -140,8 +157,14 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         title: const Text('Delete expense?'),
         content: Text('${e['expense_type']} - ${e['amount']} tk'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -158,7 +181,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   }
 
   String _label(Map<String, dynamic> b) {
-    final t = (b['production_type'] ?? '').toString().replaceAll(' Production', '');
+    final t = (b['production_type'] ?? '').toString().replaceAll(
+      ' Production',
+      '',
+    );
     final c = (b['production_category'] ?? '').toString();
     return '${b['name']} ($t - $c)';
   }
@@ -172,7 +198,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     if (batches.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: const Text('Expenses')),
-        body: const Center(child: Text('No active batch found. Add a batch first.')),
+        body: const Center(
+          child: Text('No active batch found. Add a batch first.'),
+        ),
       );
     }
     return Scaffold(
@@ -182,133 +210,192 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.noticeBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.noticeBorder),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: colors.noticeIcon),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Feed, medicine, vaccine, labour, electricity ও transport '
+                      'প্রতিদিন ব্যাচে যেভাবে apply হয় সেভাবেই Daily Records '
+                      'স্ক্রিনে লিখুন। এখানে শুধু ব্যাচ-লেভেল/এককালীন খরচ '
+                      '(লিটার, যন্ত্রপাতি, ভেট ভিজিট ইত্যাদি) — নাহলে একই খরচ '
+                      'দুইবার গণনা হবে।',
+                      style: TextStyle(fontSize: 12, color: colors.noticeText),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Form(
               key: _formKey,
-              child: Column(children: [
-                DropdownButtonFormField<String>(
-                  value: batchId,
-                  isExpanded: true,
-                  decoration: _dec('Batch', icon: Icons.inventory_2),
-                  items: batches
-                      .map((b) => DropdownMenuItem(
-                          value: b['id'] as String,
-                          child: Text(_label(b), overflow: TextOverflow.ellipsis)))
-                      .toList(),
-                  onChanged: (v) {
-                    setState(() => batchId = v);
-                    _loadExpenses();
-                  },
-                ),
-                const SizedBox(height: 10),
-                Row(children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: type,
-                      isExpanded: true,
-                      decoration: _dec('Expense type', icon: Icons.category),
-                      items: types
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                          .toList(),
-                      onChanged: (v) => setState(() => type = v!),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _amount,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: _dec('Amount (tk)', icon: Icons.payments),
-                      validator: (v) {
-                        final n = double.tryParse((v ?? '').trim());
-                        if (n == null || n <= 0) return 'Enter amount';
-                        return null;
-                      },
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _desc,
-                  decoration: _dec('Description (e.g. 10 bags starter feed)',
-                      icon: Icons.notes),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _remarks,
-                  decoration: _dec('Remarks (optional)', icon: Icons.comment),
-                ),
-                const SizedBox(height: 10),
-                Row(children: [
-                  const Icon(Icons.calendar_today, size: 18),
-                  const SizedBox(width: 8),
-                  Text('Date: ${date.toIso8601String().split('T').first}'),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () async {
-                      final d = await showDatePicker(
-                          context: context,
-                          initialDate: date,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now());
-                      if (d != null) setState(() => date = d);
+              child: Column(
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: batchId,
+                    isExpanded: true,
+                    decoration: _dec('Batch', icon: Icons.inventory_2),
+                    items: batches
+                        .map(
+                          (b) => DropdownMenuItem(
+                            value: b['id'] as String,
+                            child: Text(
+                              _label(b),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      setState(() => batchId = v);
+                      _loadExpenses();
                     },
-                    child: const Text('Change'),
                   ),
-                ]),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: saving ? null : _save,
-                    icon: saving
-                        ? const SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.save),
-                    label: const Text('Save Expense'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: type,
+                          isExpanded: true,
+                          decoration: _dec(
+                            'Expense type',
+                            icon: Icons.category,
+                          ),
+                          items: types
+                              .map(
+                                (t) =>
+                                    DropdownMenuItem(value: t, child: Text(t)),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => type = v!),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _amount,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _dec('Amount (tk)', icon: Icons.payments),
+                          validator: (v) {
+                            final n = double.tryParse((v ?? '').trim());
+                            if (n == null || n <= 0) return 'Enter amount';
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ]),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _desc,
+                    decoration: _dec(
+                      'Description (e.g. 10 bags starter feed)',
+                      icon: Icons.notes,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _remarks,
+                    decoration: _dec('Remarks (optional)', icon: Icons.comment),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Date: ${date.toIso8601String().split('T').first}'),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () async {
+                          final d = await showDatePicker(
+                            context: context,
+                            initialDate: date,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                          );
+                          if (d != null) setState(() => date = d);
+                        },
+                        child: const Text('Change'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: saving ? null : _save,
+                      icon: saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save),
+                      label: const Text('Save Expense'),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _row('Chick cost (from batch)', chickCost),
-                  _row('Other expenses', otherTotal),
-                  const Divider(),
-                  _row('Total expense', chickCost + otherTotal, bold: true),
-                  if (byType.isNotEmpty) const Divider(),
-                  ...byType.entries.map((e) => _row('  ${e.key}', e.value)),
-                ]),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _row('Chick cost (from batch)', chickCost),
+                    _row('Batch-level expenses', otherTotal),
+                    const Divider(),
+                    _row('Total expense', chickCost + otherTotal, bold: true),
+                    if (byType.isNotEmpty) const Divider(),
+                    ...byType.entries.map((e) => _row('  ${e.key}', e.value)),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            const Text('Recent expenses (swipe left to delete)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              'Recent expenses (swipe left to delete)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             if (expenses.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(16),
                 child: Center(child: Text('No expenses yet')),
               ),
-            ...expenses.map((e) => Dismissible(
-                  key: ValueKey(e['id']),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: colors.error,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 16),
-                    child: Icon(Icons.delete, color: colors.card),
+            ...expenses.map(
+              (e) => Dismissible(
+                key: ValueKey(e['id']),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  color: colors.error,
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Icon(Icons.delete, color: colors.card),
+                ),
+                confirmDismiss: (_) => _delete(e),
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.receipt_long),
+                  title: Text('${e['expense_type']}  •  ${e['amount']} tk'),
+                  subtitle: Text(
+                    '${e['expense_date']}  ${(e['description'] ?? '').toString()}',
                   ),
-                  confirmDismiss: (_) => _delete(e),
-                  child: ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.receipt_long),
-                    title: Text('${e['expense_type']}  •  ${e['amount']} tk'),
-                    subtitle: Text(
-                        '${e['expense_date']}  ${(e['description'] ?? '').toString()}'),
-                  ),
-                )),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -316,11 +403,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   }
 
   Widget _row(String l, double v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [
-          Expanded(child: Text(l)),
-          Text('${v.toStringAsFixed(2)} tk',
-              style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(l)),
+        Text(
+          '${v.toStringAsFixed(2)} tk',
+          style: TextStyle(
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
+    ),
+  );
 }
