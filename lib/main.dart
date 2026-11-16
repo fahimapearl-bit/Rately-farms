@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app_theme.dart';
 import 'auth_page.dart';
 import 'home_dashboard.dart';
+import 'reset_password_page.dart';
 import 'supabase_config.dart';
 
 Future<void> main() async {
@@ -13,6 +14,8 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  listenForPasswordRecovery();
 
   runApp(const RatelyFarmsApp());
 }
