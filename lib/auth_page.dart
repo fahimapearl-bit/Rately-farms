@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 
 import 'app_colors.dart';
+import 'auth_widgets.dart';
+import 'password_strength.dart';
+import 'reset_password_page.dart';
 
 class AuthGate extends StatelessWidget {
   final Widget child;
@@ -16,8 +19,16 @@ class AuthGate extends StatelessWidget {
       stream: SupabaseConfig.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
         final session = SupabaseConfig.client.auth.currentSession;
-        if (session == null) return const AuthPage();
-        return child;
+        return ValueListenableBuilder<bool>(
+          valueListenable: passwordRecoveryActive,
+          builder: (context, recovering, _) {
+            // A PASSWORD_RECOVERY event puts the user in a temporary session;
+            // they must set a new password before reaching the app.
+            if (recovering) return const ResetPasswordPage();
+            if (session == null) return const AuthPage();
+            return child;
+          },
+        );
       },
     );
   }
@@ -94,8 +105,8 @@ class _AuthPageState extends State<AuthPage> {
         );
         if (!mounted) return;
         final message = response.session == null
-            ? 'Registration হয়েছে। Email verify করে Login করুন।'
-            : 'Registration সফল হয়েছে।';
+            ? 'Registration complete. Verify your email, then sign in.'
+            : 'Registration successful.';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
         if (response.session == null) setState(() => isLogin = true);
       }
@@ -117,8 +128,18 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   String? requiredField(String? value, String label) {
-    if (value == null || value.trim().isEmpty) return '$label দিন';
+    if (value == null || value.trim().isEmpty) return 'Enter $label';
     return null;
+  }
+
+  Future<void> _openForgotPassword() async {
+    FocusScope.of(context).unfocus();
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ForgotPasswordDialog(
+        initialEmail: emailController.text.trim(),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -130,197 +151,133 @@ class _AuthPageState extends State<AuthPage> {
     final colors = context.colors;
     return Scaffold(
       backgroundColor: colors.soft,
-      body: Stack(
-        children: [
-          Positioned(top: -130, right: -90, child: _blob(colors.brand.withAlpha(20), 300)),
-          Positioned(bottom: -150, left: -110, child: _blob(colors.accent.withAlpha(18), 340)),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
-                  child: _buildCard(colors),
+      body: AuthBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: AuthCardShell(
+                  header: AuthHeader(
+                    title: 'Rately Farms',
+                    subtitle: isLogin
+                        ? 'Welcome back to your farm'
+                        : 'Create a new farm account',
+                  ),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _modeTabs(colors),
+                        const SizedBox(height: 22),
+                        if (!isLogin) ...[
+                          AuthField(
+                            controller: nameController,
+                            label: 'Full name',
+                            hint: 'e.g. Abdur Rahim',
+                            icon: Icons.person_outline_rounded,
+                            enabled: !busy,
+                            keyboardType: TextInputType.name,
+                            autofillHints: const [AutofillHints.name],
+                            textInputAction: TextInputAction.next,
+                            validator: (value) => requiredField(value, 'your full name'),
+                          ),
+                          const SizedBox(height: 12),
+                          AuthField(
+                            controller: mobileController,
+                            label: 'Mobile number',
+                            hint: '01XXXXXXXXX',
+                            icon: Icons.phone_outlined,
+                            enabled: !busy,
+                            keyboardType: TextInputType.phone,
+                            autofillHints: const [AutofillHints.telephoneNumber],
+                            textInputAction: TextInputAction.next,
+                            validator: (value) => requiredField(value, 'your mobile number'),
+                          ),
+                          const SizedBox(height: 12),
+                          AuthField(
+                            controller: farmController,
+                            label: 'Farm name',
+                            hint: 'e.g. Rahim Poultry Farm',
+                            icon: Icons.home_work_outlined,
+                            enabled: !busy,
+                            textInputAction: TextInputAction.next,
+                            validator: (value) => requiredField(value, 'your farm name'),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        AuthField(
+                          controller: emailController,
+                          label: 'Email',
+                          hint: 'you@example.com',
+                          icon: Icons.alternate_email_rounded,
+                          enabled: !busy,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          textInputAction: TextInputAction.next,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Enter your email';
+                            }
+                            if (!value.contains('@') || !value.contains('.')) {
+                              return 'Enter a valid email address';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _passwordField(colors),
+                        if (!isLogin) PasswordStrengthMeter(value: passwordController.text),
+                        if (isLogin)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: busy ? null : _openForgotPassword,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                minimumSize: const Size(0, 40),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Forgot password?',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 18),
+                        AuthErrorBanner(message: _error),
+                        AuthPrimaryButton(
+                          label: isLogin ? 'Sign in' : 'Create account',
+                          busy: busy,
+                          busyLabel: 'Please wait…',
+                          onPressed: submit,
+                        ),
+                        _switchLink(colors),
+                        const SizedBox(height: 6),
+                        Center(
+                          child: Text(
+                            'Rately Farms · Poultry farm management',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 0.1,
+                              color: colors.hint,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _blob(Color color, double size) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-      ),
-    );
-  }
-
-  Widget _buildCard(AppColors colors) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: colors.line),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow,
-            blurRadius: 30,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _header(colors),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
-            child: Form(
-              key: formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _modeTabs(colors),
-                  const SizedBox(height: 22),
-                  if (!isLogin) ...[
-                    _field(
-                      colors: colors,
-                      controller: nameController,
-                      label: 'Full name',
-                      hint: 'যেমন: আব্দুর রহিম',
-                      icon: Icons.person_outline_rounded,
-                      keyboardType: TextInputType.name,
-                      autofillHints: const [AutofillHints.name],
-                      textInputAction: TextInputAction.next,
-                      validator: (value) => requiredField(value, 'Full name'),
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      colors: colors,
-                      controller: mobileController,
-                      label: 'Mobile number',
-                      hint: '01XXXXXXXXX',
-                      icon: Icons.phone_outlined,
-                      keyboardType: TextInputType.phone,
-                      autofillHints: const [AutofillHints.telephoneNumber],
-                      textInputAction: TextInputAction.next,
-                      validator: (value) => requiredField(value, 'Mobile number'),
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      colors: colors,
-                      controller: farmController,
-                      label: 'Farm name',
-                      hint: 'যেমন: রহিম পোল্ট্রি ফার্ম',
-                      icon: Icons.home_work_outlined,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) => requiredField(value, 'Farm name'),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _field(
-                    colors: colors,
-                    controller: emailController,
-                    label: 'Email',
-                    hint: 'you@example.com',
-                    icon: Icons.alternate_email_rounded,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    textInputAction: TextInputAction.next,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) return 'Email দিন';
-                      if (!value.contains('@')) return 'সঠিক email দিন';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _passwordField(colors),
-                  if (!isLogin) _strengthMeter(colors),
-                  const SizedBox(height: 18),
-                  _errorBanner(colors),
-                  _submitButton(colors),
-                  _switchLink(colors),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      'Rately Farms · পোল্ট্রি ফার্ম ম্যানেজমেন্ট',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 0.1,
-                        color: colors.hint,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _header(AppColors colors) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.brand, colors.accent],
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 54,
-            width: 54,
-            decoration: BoxDecoration(
-              color: colors.onBrand.withAlpha(36),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.onBrand.withAlpha(64)),
-            ),
-            child: Icon(Icons.agriculture_rounded, color: colors.onBrand, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Rately Farms',
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.4,
-                    color: colors.onBrand,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  isLogin
-                      ? 'আপনার farm-এ ফিরে আসুন'
-                      : 'নতুন farm account তৈরি করুন',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.3,
-                    fontWeight: FontWeight.w500,
-                    color: colors.onBrand.withAlpha(215),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -335,14 +292,14 @@ class _AuthPageState extends State<AuthPage> {
       ),
       child: Row(
         children: [
-          _tab(colors, 'লগইন', isLogin, () {
+          _tab(colors, 'Sign in', isLogin, () {
             if (busy) return;
             setState(() {
               isLogin = true;
               _error = null;
             });
           }),
-          _tab(colors, 'রেজিস্টার', !isLogin, () {
+          _tab(colors, 'Register', !isLogin, () {
             if (busy) return;
             setState(() {
               isLogin = false;
@@ -394,46 +351,14 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  Widget _field({
-    required AppColors colors,
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    Iterable<String>? autofillHints,
-    TextInputAction? textInputAction,
-    Widget? suffixIcon,
-    String? Function(String?)? validator,
-    void Function(String)? onSubmitted,
-  }) {
-    return TextFormField(
-      controller: controller,
-      enabled: !busy,
-      keyboardType: keyboardType,
-      autofillHints: autofillHints,
-      textInputAction: textInputAction,
-      onFieldSubmitted: onSubmitted,
-      validator: validator,
-      style: TextStyle(fontSize: 15, color: colors.ink),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: colors.surfaceAlt,
-        prefixIcon: Icon(icon, size: 20, color: colors.muted),
-        suffixIcon: suffixIcon,
-      ),
-    );
-  }
-
   Widget _passwordField(AppColors colors) {
-    return _field(
-      colors: colors,
+    return AuthField(
       controller: passwordController,
       label: 'Password',
-      hint: 'কমপক্ষে ৬ অক্ষর',
+      hint: isLogin ? 'Your password' : 'At least 8 characters',
       icon: Icons.lock_outline_rounded,
+      enabled: !busy,
+      obscureText: obscurePassword,
       keyboardType: TextInputType.visiblePassword,
       autofillHints: [
         isLogin ? AutofillHints.password : AutofillHints.newPassword,
@@ -441,7 +366,7 @@ class _AuthPageState extends State<AuthPage> {
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => busy ? null : submit(),
       suffixIcon: IconButton(
-        tooltip: obscurePassword ? 'Password দেখুন' : 'Password লুকান',
+        tooltip: obscurePassword ? 'Show password' : 'Hide password',
         icon: Icon(
           obscurePassword
               ? Icons.visibility_outlined
@@ -452,144 +377,14 @@ class _AuthPageState extends State<AuthPage> {
         onPressed: () => setState(() => obscurePassword = !obscurePassword),
       ),
       validator: (value) {
-        if (value == null || value.length < 6) {
-          return 'কমপক্ষে ৬ অক্ষরের password দিন';
+        if (value == null || value.isEmpty) return 'Enter your password';
+        // Only new passwords are length-checked; existing accounts may still
+        // hold a shorter password from before the 8-character rule.
+        if (!isLogin && value.length < 8) {
+          return 'Password must be at least 8 characters';
         }
         return null;
       },
-    );
-  }
-
-  Widget _strengthMeter(AppColors colors) {
-    final value = passwordController.text;
-    final checks = <bool>[
-      value.length >= 8,
-      RegExp(r'[A-Z]').hasMatch(value),
-      RegExp(r'[0-9]').hasMatch(value),
-      RegExp(r'[^A-Za-z0-9]').hasMatch(value),
-    ];
-    final score = value.isEmpty ? 0 : checks.where((e) => e).length;
-    final Color color = score <= 1
-        ? colors.error
-        : score == 2
-            ? colors.warning
-            : score == 3
-                ? colors.info
-                : colors.brand;
-
-    const labels = <String>['খুব দুর্বল', 'দুর্বল', 'মাঝারি', 'ভালো', 'শক্তিশালী'];
-    final label = value.isEmpty ? 'শক্তি' : labels[score];
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 9, left: 2, right: 2),
-      child: Row(
-        children: [
-          for (var i = 0; i < 4; i++) ...[
-            Expanded(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 5,
-                decoration: BoxDecoration(
-                  color: i < score ? color : colors.line,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-            ),
-            if (i != 3) const SizedBox(width: 6),
-          ],
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 62,
-            child: Text(
-              label,
-              textAlign: TextAlign.right,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: value.isEmpty ? colors.muted : color,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _errorBanner(AppColors colors) {
-    final message = _error;
-    if (message == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        decoration: BoxDecoration(
-          color: colors.errorSoft,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.errorBorder.withAlpha(110)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.error_outline_rounded, size: 18, color: colors.errorText),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.35,
-                  color: colors.errorText,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _submitButton(AppColors colors) {
-    return SizedBox(
-      height: 52,
-      child: FilledButton(
-        onPressed: busy ? null : submit,
-        child: busy
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.onBrand,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'অপেক্ষা করুন…',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                  ),
-                ],
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    isLogin ? 'লগইন করুন' : 'রেজিস্টার করুন',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      letterSpacing: 0.1,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward_rounded, size: 18),
-                ],
-              ),
-      ),
     );
   }
 
@@ -601,7 +396,7 @@ class _AuthPageState extends State<AuthPage> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            isLogin ? 'নতুন ব্যবহারকারী?' : 'আগেই account আছে?',
+            isLogin ? 'New to Rately Farms?' : 'Already have an account?',
             style: TextStyle(fontSize: 13, color: colors.muted),
           ),
           TextButton(
@@ -617,12 +412,194 @@ class _AuthPageState extends State<AuthPage> {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: Text(
-              isLogin ? 'রেজিস্টার করুন' : 'লগইন করুন',
+              isLogin ? 'Create one' : 'Sign in',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Email-entry dialog for the "Forgot password?" flow. It sends a Supabase
+/// recovery email whose link comes back to `ratelyfarms://reset-password`.
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  final formKey = GlobalKey<FormState>();
+  late final TextEditingController emailController =
+      TextEditingController(text: widget.initialEmail);
+  bool busy = false;
+  bool sent = false;
+  String? error;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (!formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      await SupabaseConfig.client.auth.resetPasswordForEmail(
+        emailController.text.trim(),
+        redirectTo: passwordRecoveryRedirectTo(),
+      );
+      if (!mounted) return;
+      setState(() => sent = true);
+    } on AuthException catch (e) {
+      if (mounted) setState(() => error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not send the reset email: $e');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return AlertDialog(
+      backgroundColor: context.colors.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+      contentPadding: const EdgeInsets.fromLTRB(22, 14, 22, 4),
+      actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+      title: Row(
+        children: [
+          Icon(
+            sent ? Icons.mark_email_read_outlined : Icons.lock_reset_rounded,
+            size: 22,
+            color: colors.brand,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              sent ? 'Check your inbox' : 'Reset your password',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: colors.ink,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 340,
+        child: sent ? _sentBody() : _formBody(),
+      ),
+      actions: [
+        if (sent)
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          )
+        else ...[
+          TextButton(
+            onPressed: busy ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: busy ? null : _send,
+            child: busy
+                ? SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.onBrand,
+                    ),
+                  )
+                : const Text('Send link'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _formBody() {
+    final colors = context.colors;
+    return Form(
+      key: formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Enter the email on your account and we will send you a link to set a new password.',
+            style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted),
+          ),
+          const SizedBox(height: 16),
+          AuthField(
+            controller: emailController,
+            label: 'Email',
+            hint: 'you@example.com',
+            icon: Icons.alternate_email_rounded,
+            enabled: !busy,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => busy ? null : _send(),
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Enter your email';
+              }
+              if (!value.contains('@') || !value.contains('.')) {
+                return 'Enter a valid email address';
+              }
+              return null;
+            },
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            AuthErrorBanner(message: error),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sentBody() {
+    final colors = context.colors;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'We sent a password reset link to',
+          style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          emailController.text.trim(),
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: colors.ink,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Open the link on this device to set a new password. The link expires '
+          'after a short time — check your spam folder if it does not arrive.',
+          style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted),
+        ),
+      ],
     );
   }
 }
