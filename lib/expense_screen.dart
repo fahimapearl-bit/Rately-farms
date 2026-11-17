@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'add_batch_screen.dart';
 import 'app_colors.dart';
+import 'average_weight_screen.dart';
+import 'daily_record_screen.dart';
 
 class ExpenseScreenNew extends StatefulWidget {
   const ExpenseScreenNew({super.key});
@@ -17,6 +20,31 @@ class ExpenseScreenNew extends StatefulWidget {
 class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   final _client = Supabase.instance.client;
   final _money = NumberFormat('#,##0.##');
+
+  Future<void> _navigateToDailyRecord([String? batchId]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DailyRecordPageNew(initialBatchId: batchId),
+      ),
+    );
+    if (mounted) {
+      _load();
+    }
+  }
+
+  Future<void> _navigateToWeight([String? batchId]) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AverageWeightScreen(initialBatchId: batchId),
+      ),
+    );
+    if (mounted) {
+      _load();
+    }
+  }
+
 
   bool _loading = true;
   String? _error;
@@ -274,7 +302,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         ),
       );
 
-  Widget _emptyState(AppColors colors, {required String title, required String subtitle, required IconData icon}) =>
+  Widget _emptyState(AppColors colors, {required String title, required String subtitle, required IconData icon, Widget? action}) =>
       Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -294,6 +322,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 style: TextStyle(fontSize: 12, color: colors.muted),
                 textAlign: TextAlign.center,
               ),
+              if (action != null) ...[
+                const SizedBox(height: 16),
+                action,
+              ],
             ],
           ),
         ),
@@ -307,8 +339,25 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       return _emptyState(
         colors,
         title: 'কোনো চলমান (Active) ব্যাচ নেই',
-        subtitle: 'নতুন ব্যাচ শুরু করতে Home ড্যাশবোর্ড থেকে "Add Batch" এ যান।',
+        subtitle: 'নতুন ব্যাচ শুরু করতে নিচের বাটনে চাপ দিন অথবা Home ড্যাশবোর্ড থেকে "Add Batch" এ যান।',
         icon: Icons.inventory_2_outlined,
+        action: ElevatedButton.icon(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddBatchPageNew()),
+            );
+            if (mounted) _load();
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('নতুন ব্যাচ যোগ করুন'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: colors.brand,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
       );
     }
 
@@ -389,6 +438,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           partialRevenue: partialRevenue,
           isLayer: isLayer,
           currentEggStock: currentEggStock,
+          recordsCount: records.length,
         ),
         const SizedBox(height: 18),
 
@@ -399,11 +449,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         const SizedBox(height: 18),
 
         // Time Series (Feed & Daily Cost)
-        _timeSeriesSection(colors, feedSeries, dailyCostSeries),
+        _timeSeriesSection(colors, feedSeries, dailyCostSeries, batchId),
         const SizedBox(height: 18),
 
         // Production Analysis (Broiler FCR or Layer Eggs)
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records),
+        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records, batchId),
 
         if (partialRevenue > 0) ...[
           const SizedBox(height: 18),
@@ -532,10 +582,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         ),
         const SizedBox(height: 18),
 
-        _timeSeriesSection(colors, feedSeries, dailyCostSeries),
+        _timeSeriesSection(colors, feedSeries, dailyCostSeries, null),
         const SizedBox(height: 18),
 
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records),
+        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records, null),
         const SizedBox(height: 18),
 
         _sectionTitle('All Closed Batches History', Icons.history, colors.info),
@@ -568,7 +618,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     required double partialRevenue,
     required bool isLayer,
     required int currentEggStock,
+    required int recordsCount,
   }) {
+    final batchId = '${batch['id']}';
     final age = _age(batch);
     final type = _batchType(batch);
 
@@ -675,7 +727,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             ),
             const SizedBox(height: 12),
 
-            // 3 key production metrics
+            // 3 key production metrics with quick tap-to-entry
             Row(
               children: [
                 Expanded(
@@ -685,6 +737,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     subtitle: 'মর্টালিটি: $mortality',
                     color: colors.brand,
                     icon: Icons.pets,
+                    onTap: () => _navigateToDailyRecord(batchId),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -695,6 +748,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     subtitle: 'চলতি গড় খরচ',
                     color: colors.purple,
                     icon: Icons.price_check,
+                    onTap: () => _navigateToDailyRecord(batchId),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -702,12 +756,82 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   child: _activeMetricPill(
                     title: 'কেজি প্রতি খরচ',
                     value: latestWeight > 0 ? '৳${_money.format(costPerKg)}' : '—',
-                    subtitle: latestWeight > 0 ? 'ওজন ${_money.format(latestWeight)}kg' : 'ওজন দিন',
+                    subtitle: latestWeight > 0 ? 'ওজন ${_money.format(latestWeight)}kg' : 'ওজন দিন ➔',
                     color: colors.accent,
                     icon: Icons.scale,
+                    onTap: () => _navigateToWeight(batchId),
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // DIRECT SHORTCUTS: Always visible quick action banner for daily expense & weight
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: colors.brand.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colors.brand.withOpacity(0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.bolt, size: 16, color: colors.brand),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          recordsCount == 0 || latestWeight == 0
+                              ? 'পারফর্মেন্স ও সঠিক হিসেব দেখতে দ্রুত এন্ট্রি দিন:'
+                              : 'আজকের হিসাব দ্রুত যোগ করুন:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.ink,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => _navigateToDailyRecord(batchId),
+                          icon: const Icon(Icons.receipt_long, size: 15),
+                          label: const Text('দৈনিক খরচ ও ফিড'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.brand,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _navigateToWeight(batchId),
+                          icon: const Icon(Icons.scale, size: 15),
+                          label: const Text('গড় ওজন এন্ট্রি'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.accent,
+                            side: BorderSide(color: colors.accent),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -929,8 +1053,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     required String subtitle,
     required Color color,
     required IconData icon,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
@@ -955,6 +1080,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (onTap != null)
+                Icon(Icons.arrow_forward_ios, size: 9, color: color.withOpacity(0.7)),
             ],
           ),
           const SizedBox(height: 6),
@@ -982,6 +1109,15 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: pill,
+      );
+    }
+    return pill;
   }
 
   Widget _partialSalesCard(AppColors colors, double partialRevenue, int birdsSold) => Card(
@@ -1174,6 +1310,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     AppColors colors,
     List<_SeriesPoint> feed,
     List<_SeriesPoint> dailyCost,
+    String? batchId,
   ) {
     return Card(
       elevation: 0,
@@ -1213,11 +1350,55 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               color: colors.warning,
             ),
             if (feed.isEmpty && dailyCost.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'এই batch-এর কোনো dated Daily Record এখনো নেই।',
-                  style: TextStyle(fontSize: 12, color: colors.muted),
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.warning.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colors.warning.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.show_chart, color: colors.warning, size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'কোনো দৈনিক খরচ বা ফিড রেকর্ড নেই',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: colors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'প্রতিদিনের ফিড ও খরচ যোগ করলে এখানে স্বয়ংক্রিয় গ্রাফ তৈরি হবে।',
+                            style: TextStyle(fontSize: 11, color: colors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (batchId != null) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () => _navigateToDailyRecord(batchId),
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('ফিড/খরচ'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.warning,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
           ],
@@ -1232,6 +1413,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     List<_SeriesPoint> eggs,
     List<_SeriesPoint> fcr,
     List<Map<String, dynamic>> records,
+    String? batchId,
   ) {
     if (isLayer) {
       final totalEggs = eggs.fold<double>(0, (sum, point) => sum + point.value);
@@ -1283,9 +1465,56 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 color: colors.warning,
               ),
               if (eggs.isEmpty)
-                _analysisNote(
-                  'ডিম উৎপাদনের কোনো record নেই। Daily Records থেকে good eggs-এর dated entry যোগ করুন।',
-                  colors,
+                Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.warning.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colors.warning.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.egg_outlined, color: colors.warning, size: 24),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ডিম উৎপাদনের রেকর্ড নেই',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: colors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Daily Records থেকে ডিম সংগ্রহের এন্ট্রি দিন।',
+                              style: TextStyle(fontSize: 11, color: colors.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (batchId != null) ...[
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => _navigateToDailyRecord(batchId),
+                          icon: const Icon(Icons.add, size: 14),
+                          label: const Text('ডিম এন্ট্রি'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.warning,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 )
               else if (eggs.length < 3)
                 _analysisNote(
@@ -1352,6 +1581,71 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   : 'FCR = ওই দিনের feed kg ÷ আগের weight sample থেকে পাওয়া weight gain kg। কম FCR ভালো।',
               colors,
             ),
+            if (fcr.isEmpty && batchId != null)
+              Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.accent.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colors.accent.withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.analytics_outlined, color: colors.accent, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'FCR ও রূপান্তর দক্ষতা পেতে ডাটা এন্ট্রি দিন',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: colors.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'কমপক্ষে ২টি ভিন্ন দিনের ওজন এবং ফিড এন্ট্রি দিলে স্বয়ংক্রিয়ভাবে FCR ও এফিসিয়েন্সি গ্রাফ ফুটে উঠবে।',
+                      style: TextStyle(fontSize: 11, color: colors.muted),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => _navigateToWeight(batchId),
+                          icon: const Icon(Icons.scale, size: 14),
+                          label: const Text('+ ওজন এন্ট্রি'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colors.accent,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _navigateToDailyRecord(batchId),
+                          icon: const Icon(Icons.receipt_long, size: 14),
+                          label: const Text('+ দৈনিক খরচ ও ফিড'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.brand,
+                            side: BorderSide(color: colors.brand),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
