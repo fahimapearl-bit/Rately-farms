@@ -265,7 +265,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             : _error != null
                 ? _errorView(colors)
                 : _batches.isEmpty
-                    ? const Center(child: Text('কোনো batch পাওয়া যায়নি'))
+                    ? const Center(child: Text('No batch found'))
                     : TabBarView(
                         children: [
                           RefreshIndicator(
@@ -290,7 +290,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             children: [
               Icon(Icons.error_outline, color: colors.error, size: 44),
               const SizedBox(height: 10),
-              Text('Report load হয়নি: $_error', textAlign: TextAlign.center),
+              Text('Failed to load report: $_error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: _load,
@@ -338,8 +338,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     if (_activeBatches.isEmpty) {
       return _emptyState(
         colors,
-        title: 'কোনো চলমান (Active) ব্যাচ নেই',
-        subtitle: 'নতুন ব্যাচ শুরু করতে নিচের বাটনে চাপ দিন অথবা Home ড্যাশবোর্ড থেকে "Add Batch" এ যান।',
+        title: 'No active batch',
+        subtitle: 'Tap the button below to start a new batch, or go to "Add Batch" from the Home dashboard.',
         icon: Icons.inventory_2_outlined,
         action: ElevatedButton.icon(
           onPressed: () async {
@@ -350,7 +350,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             if (mounted) _load();
           },
           icon: const Icon(Icons.add),
-          label: const Text('নতুন ব্যাচ যোগ করুন'),
+          label: const Text('Add New Batch'),
           style: ElevatedButton.styleFrom(
             backgroundColor: colors.brand,
             foregroundColor: Colors.white,
@@ -481,8 +481,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     if (_closedBatches.isEmpty) {
       return _emptyState(
         colors,
-        title: 'কোনো সমাপ্ত (Closed) ব্যাচ নেই',
-        subtitle: 'ব্যাচ বিক্রি সম্পন্ন হলে ব্যাচ স্ট্যাটাস Closed করুন, তখন এখানে চূড়ান্ত হিসাব দেখা যাবে।',
+        title: 'No closed batch',
+        subtitle: 'Once the batch is fully sold, set its status to Closed to see the final accounts here.',
         icon: Icons.check_circle_outline,
       );
     }
@@ -660,7 +660,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         ),
                       ),
                       Text(
-                        'বর্তমান মোট চলতি ব্যয় · $type Batch',
+                        'Current total running cost · $type Batch',
                         style: TextStyle(fontSize: 11, color: colors.muted),
                       ),
                     ],
@@ -702,7 +702,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'TOTAL PRODUCTION COST (চলতি খরচ)',
+                        'TOTAL PRODUCTION COST',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -732,9 +732,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               children: [
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'জীবিত পাখি',
-                    value: '$remainingLiveBirds টি',
-                    subtitle: 'মর্টালিটি: $mortality',
+                    title: 'Live Birds',
+                    value: '$remainingLiveBirds birds',
+                    subtitle: 'Mortality: $mortality',
                     color: colors.brand,
                     icon: Icons.pets,
                     onTap: () => _navigateToDailyRecord(batchId),
@@ -743,9 +743,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'পাখি প্রতি খরচ',
+                    title: 'Cost per Bird',
                     value: '৳${_money.format(costPerLiveBird)}',
-                    subtitle: 'চলতি গড় খরচ',
+                    subtitle: 'Current avg. cost',
                     color: colors.purple,
                     icon: Icons.price_check,
                     onTap: () => _navigateToDailyRecord(batchId),
@@ -754,9 +754,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'কেজি প্রতি খরচ',
+                    title: 'Cost per kg',
                     value: latestWeight > 0 ? '৳${_money.format(costPerKg)}' : '—',
-                    subtitle: latestWeight > 0 ? 'ওজন ${_money.format(latestWeight)}kg' : 'ওজন দিন ➔',
+                    subtitle: latestWeight > 0 ? 'Weight ${_money.format(latestWeight)}kg' : 'Enter weight ➔',
                     color: colors.accent,
                     icon: Icons.scale,
                     onTap: () => _navigateToWeight(batchId),
@@ -784,8 +784,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                       Expanded(
                         child: Text(
                           recordsCount == 0 || latestWeight == 0
-                              ? 'পারফর্মেন্স ও সঠিক হিসেব দেখতে দ্রুত এন্ট্রি দিন:'
-                              : 'আজকের হিসাব দ্রুত যোগ করুন:',
+                              ? 'Add entries quickly to see performance and accurate figures:'
+                              : 'Quickly add the records for today:',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -802,7 +802,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         child: ElevatedButton.icon(
                           onPressed: () => _navigateToDailyRecord(batchId),
                           icon: const Icon(Icons.receipt_long, size: 15),
-                          label: const Text('দৈনিক খরচ ও ফিড'),
+                          label: const Text('Daily Cost & Feed'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.brand,
                             foregroundColor: Colors.white,
@@ -818,7 +818,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         child: OutlinedButton.icon(
                           onPressed: () => _navigateToWeight(batchId),
                           icon: const Icon(Icons.scale, size: 15),
-                          label: const Text('গড় ওজন এন্ট্রি'),
+                          label: const Text('Avg. Weight Entry'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colors.accent,
                             side: BorderSide(color: colors.accent),
@@ -855,7 +855,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           Row(
                             children: [
                               Text(
-                                'সম্ভাব্য বাজারমূল্য (Live Valuation): ',
+                                'Estimated Market Value (Live Valuation): ',
                                 style: TextStyle(fontSize: 11, color: colors.muted),
                               ),
                               Text(
@@ -871,8 +871,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           const SizedBox(height: 2),
                           Text(
                             isLayer
-                                ? 'পাখির মূল্য + ডিমের মজুদ ($currentEggStock টি)'
-                                : 'বাজারদর ৳${_money.format(marketPrice)}/kg হিসেবে মোট আনুমানিক মূল্য',
+                                ? 'Bird value + egg stock ($currentEggStock eggs)'
+                                : 'Total estimated value at market rate ৳${_money.format(marketPrice)}/kg',
                             style: TextStyle(fontSize: 10, color: colors.muted),
                           ),
                         ],
@@ -968,7 +968,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        netProfit >= 0 ? 'NET PROFIT (নিট লাভ)' : 'NET LOSS (নিট ক্ষতি)',
+                        netProfit >= 0 ? 'NET PROFIT' : 'NET LOSS',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -990,7 +990,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('ROI / মার্জিন', style: TextStyle(fontSize: 11, color: colors.muted)),
+                      Text('ROI / Margin', style: TextStyle(fontSize: 11, color: colors.muted)),
                       const SizedBox(height: 2),
                       Text(
                         '${roi.toStringAsFixed(1)}%',
@@ -1011,9 +1011,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               children: [
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'মোট ব্যয়',
+                    title: 'Total Cost',
                     value: '৳${_money.format(totalCost)}',
-                    subtitle: 'সব খরচ মিলিয়ে',
+                    subtitle: 'All expenses combined',
                     color: colors.warning,
                     icon: Icons.receipt_long,
                   ),
@@ -1021,9 +1021,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'মোট বিক্রয়',
+                    title: 'Total Sales',
                     value: '৳${_money.format(totalRevenue)}',
-                    subtitle: 'সব রেভিনিউ',
+                    subtitle: 'All revenue',
                     color: colors.brand,
                     icon: Icons.point_of_sale,
                   ),
@@ -1031,9 +1031,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _activeMetricPill(
-                    title: 'পাখি প্রতি লাভ/ক্ষতি',
+                    title: 'Profit/Loss per Bird',
                     value: '৳${_money.format(profitPerBird.abs())}',
-                    subtitle: netProfit >= 0 ? 'লাভ / পাখি' : 'ক্ষতি / পাখি',
+                    subtitle: netProfit >= 0 ? 'Profit / bird' : 'Loss / bird',
                     color: profitColor,
                     icon: Icons.trending_up,
                   ),
@@ -1142,7 +1142,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               ),
               const SizedBox(height: 6),
               Text(
-                'এই অ্যাক্টিভ ব্যাচ থেকে ইতিমধ্যে $birdsSold টি পাখি বিক্রি বাবদ এই রেভিনিউ যুক্ত হয়েছে।',
+                'This revenue is already included from $birdsSold birds sold from this active batch.',
                 style: TextStyle(fontSize: 11, color: colors.muted),
               ),
             ],
@@ -1367,7 +1367,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'কোনো দৈনিক খরচ বা ফিড রেকর্ড নেই',
+                            'No daily cost or feed records',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -1376,7 +1376,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'প্রতিদিনের ফিড ও খরচ যোগ করলে এখানে স্বয়ংক্রিয় গ্রাফ তৈরি হবে।',
+                            'Add daily feed and cost entries and a graph will be created here automatically.',
                             style: TextStyle(fontSize: 11, color: colors.muted),
                           ),
                         ],
@@ -1387,7 +1387,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                       ElevatedButton.icon(
                         onPressed: () => _navigateToDailyRecord(batchId),
                         icon: const Icon(Icons.add, size: 14),
-                        label: const Text('ফিড/খরচ'),
+                        label: const Text('Feed/Cost'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colors.warning,
                           foregroundColor: Colors.white,
@@ -1482,7 +1482,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'ডিম উৎপাদনের রেকর্ড নেই',
+                              'No egg production records',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -1491,7 +1491,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Daily Records থেকে ডিম সংগ্রহের এন্ট্রি দিন।',
+                              'Add egg collection entries from Daily Records.',
                               style: TextStyle(fontSize: 11, color: colors.muted),
                             ),
                           ],
@@ -1502,7 +1502,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         ElevatedButton.icon(
                           onPressed: () => _navigateToDailyRecord(batchId),
                           icon: const Icon(Icons.add, size: 14),
-                          label: const Text('ডিম এন্ট্রি'),
+                          label: const Text('Egg Entry'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.warning,
                             foregroundColor: Colors.white,
@@ -1518,7 +1518,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 )
               else if (eggs.length < 3)
                 _analysisNote(
-                  'এখন $eggDaysLabel data আছে। অর্থপূর্ণ trend-এর জন্য কমপক্ষে ৩ দিনের egg record যোগ করুন।',
+                  'Currently $eggDaysLabel of data. Add at least 3 days of egg records for a meaningful trend.',
                   colors,
                 )
               else
@@ -1577,8 +1577,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             ),
             _analysisNote(
               fcr.isEmpty
-                  ? 'FCR chart-এর জন্য অন্তত দুইটি dated average-weight record প্রয়োজন।'
-                  : 'FCR = ওই দিনের feed kg ÷ আগের weight sample থেকে পাওয়া weight gain kg। কম FCR ভালো।',
+                  ? 'At least two dated average-weight records are needed for the FCR chart.'
+                  : 'FCR = feed kg of that day ÷ weight gain kg from the previous weight sample. Lower FCR is better.',
               colors,
             ),
             if (fcr.isEmpty && batchId != null)
@@ -1598,7 +1598,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         Icon(Icons.analytics_outlined, color: colors.accent, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          'FCR ও রূপান্তর দক্ষতা পেতে ডাটা এন্ট্রি দিন',
+                          'Add data entries to get FCR and conversion efficiency',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -1609,7 +1609,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'কমপক্ষে ২টি ভিন্ন দিনের ওজন এবং ফিড এন্ট্রি দিলে স্বয়ংক্রিয়ভাবে FCR ও এফিসিয়েন্সি গ্রাফ ফুটে উঠবে।',
+                      'Add weight and feed entries for at least 2 different days and the FCR and efficiency graph will appear automatically.',
                       style: TextStyle(fontSize: 11, color: colors.muted),
                     ),
                     const SizedBox(height: 10),
@@ -1618,7 +1618,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         ElevatedButton.icon(
                           onPressed: () => _navigateToWeight(batchId),
                           icon: const Icon(Icons.scale, size: 14),
-                          label: const Text('+ ওজন এন্ট্রি'),
+                          label: const Text('+ Weight Entry'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colors.accent,
                             foregroundColor: Colors.white,
@@ -1632,7 +1632,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                         OutlinedButton.icon(
                           onPressed: () => _navigateToDailyRecord(batchId),
                           icon: const Icon(Icons.receipt_long, size: 14),
-                          label: const Text('+ দৈনিক খরচ ও ফিড'),
+                          label: const Text('+ Daily Cost & Feed'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colors.brand,
                             side: BorderSide(color: colors.brand),
