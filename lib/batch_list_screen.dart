@@ -3,6 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_colors.dart';
 
+class AddBirdsResult {
+  final int quantity;
+  final double pricePerBird;
+  final String source;
+  const AddBirdsResult(this.quantity, this.pricePerBird, this.source);
+}
+
 class BatchListScreenNew extends StatefulWidget {
   const BatchListScreenNew({super.key});
 
@@ -47,6 +54,162 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
       }
     } finally {
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> addBirdsToBatch(Map<String, dynamic> batch, AddBirdsResult result) async {
+    try {
+      final user = client.auth.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      final batchId = batch['id'].toString();
+
+      // add_number: next in the add1, add2, add3... sequence.
+      final last = await client
+          .from('bird_additions')
+          .select('add_number')
+          .eq('batch_id', batchId)
+          .order('add_number', ascending: false)
+          .limit(1);
+      final nextAdd = last.isEmpty
+          ? 1
+          : _int(last.first['add_number']) + 1;
+
+      await client.from('bird_additions').insert({
+        'user_id': user.id,
+        'batch_id': batchId,
+        'add_number': nextAdd,
+        'add_date': DateTime.now().toIso8601String().split('T').first,
+        'quantity': result.quantity,
+        'price_per_bird': result.pricePerBird,
+        'source': result.source,
+      });
+
+      // batches.additional_birds is re-synced by the DB trigger
+      // sync_batch_additional_birds().
+      await loadBatches();
+
+      if (mounted) {
+        final colors = context.colors;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Added ${result.quantity} birds (add$nextAdd) to "${batch['name']}"',
+            ),
+            backgroundColor: colors.brand,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final colors = context.colors;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add birds: $e'),
+            backgroundColor: colors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  int _int(dynamic v) {
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('${v ?? ''}') ?? 0;
+  }
+
+  Future<void> showAddBirdsDialog(Map<String, dynamic> batch) async {
+    final colors = context.colors;
+    final qtyCtrl = TextEditingController();
+    final priceCtrl = TextEditingController();
+    final sourceCtrl = TextEditingController(text: 'Hatchery');
+    final formKey = GlobalKey<FormState>();
+    final alreadyAdded = _int(batch['additional_birds']);
+
+    final result = await showDialog<AddBirdsResult>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add Birds — ${batch['name']}'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Added so far: $alreadyAdded pcs',
+                style: TextStyle(color: colors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: qtyCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Number of birds *',
+                  hintText: '100',
+                ),
+                validator: (v) {
+                  final n = int.tryParse(v?.trim() ?? '');
+                  if (n == null || n <= 0) return 'Enter a count greater than 0';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: priceCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Price / bird',
+                  hintText: '50.00',
+                  prefixText: '৳ ',
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final p = double.tryParse(v.trim());
+                  if (p == null || p < 0) return 'Enter a valid price';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: sourceCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Source',
+                  hintText: 'Hatchery',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: colors.brand),
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(
+                context,
+                AddBirdsResult(
+                  int.parse(qtyCtrl.text.trim()),
+                  double.tryParse(priceCtrl.text.trim()) ?? 0,
+                  sourceCtrl.text.trim().isEmpty
+                      ? 'Hatchery'
+                      : sourceCtrl.text.trim(),
+                ),
+              );
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      await addBirdsToBatch(batch, result);
     }
   }
 
@@ -253,7 +416,8 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text('Type: ${batch['production_type'] ?? '-'} (${batch['production_category'] ?? '-'})'),
-                                  Text('Breed: ${batch['breed'] ?? '-'} | Birds: ${batch['initial_birds'] ?? 0}'),
+                                  Text('Breed: ${batch['breed'] ?? '-'} | Birds: ${batch['initial_birds'] ?? 0}'
+                                      '${_int(batch['additional_birds']) > 0 ? ' + ${_int(batch['additional_birds'])} added' : ''}'),
                                   Text('Started: ${batch['start_date'] ?? '-'}'),
                                   if (!isActive && batch['closed_date'] != null)
                                     Text('Closed: ${batch['closed_date']}', style: TextStyle(color: colors.muted)),
@@ -261,13 +425,19 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                      if (isActive)
+                                      if (isActive) ...[
+                                        OutlinedButton.icon(
+                                          icon: Icon(Icons.add_circle_outline, size: 16, color: colors.brand),
+                                          label: Text('Add Birds', style: TextStyle(color: colors.brand)),
+                                          onPressed: () => showAddBirdsDialog(batch),
+                                        ),
+                                        const SizedBox(width: 8),
                                         OutlinedButton.icon(
                                           icon: Icon(Icons.check_box_outlined, size: 16, color: colors.warning),
                                           label: Text('Close Batch', style: TextStyle(color: colors.warning)),
                                           onPressed: () => confirmCloseBatch(batch),
-                                        )
-                                      else
+                                        ),
+                                      ] else
                                         OutlinedButton.icon(
                                           icon: Icon(Icons.replay, size: 16, color: colors.brand),
                                           label: Text('Re-open', style: TextStyle(color: colors.brand)),

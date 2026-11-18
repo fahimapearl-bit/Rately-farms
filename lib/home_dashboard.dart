@@ -9,7 +9,6 @@ import 'sales_screen.dart';
 import 'expense_screen.dart';
 import 'cloud_lists_screen.dart';
 import 'cloud_summary_screens.dart';
-import 'management_screens.dart';
 import 'market_price_screen.dart';
 import 'layer_performance_screen.dart';
 import 'layer_snapshot_card.dart';
@@ -266,9 +265,9 @@ class HomeDashboardPage extends StatelessWidget {
                 ),
               ),
               _DashboardItem(
-                title: "Expenses",
-                subtitle: "Feed, medicine & more",
-                icon: Icons.receipt_long,
+                title: "Cost & Revenue",
+                subtitle: "Batch cost, sales & stock",
+                icon: Icons.analytics_outlined,
                 color: colors.warning,
                 onTap: () => Navigator.push(
                   context,

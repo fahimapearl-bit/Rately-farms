@@ -20,12 +20,20 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
   final sourceController = TextEditingController(text: 'Hatchery');
   final notesController = TextEditingController();
   final customCategoryController = TextEditingController();
+  final midCycleAgeCtrl = TextEditingController();
+  final openingFeedCtrl = TextEditingController();
+  final openingCostCtrl = TextEditingController();
 
   String? productionType = 'Meat Production';
   String? productionCategory = 'Broiler';
   String? breed;
   DateTime startDate = DateTime.now();
   bool _isSaving = false;
+
+  /// Mid-cycle onboarding: the batch is already running and is being entered
+  /// into the app today (age > 0, some birds may already be lost, feed/cost
+  /// balance already incurred).
+  bool isMidCycle = false;
 
   final meatCategories = ['Broiler', 'Sonali', 'Deshi', 'Other'];
   final eggCategories = ['Layer', 'Sonali', 'Deshi', 'Other'];
@@ -71,6 +79,9 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     sourceController.dispose();
     notesController.dispose();
     customCategoryController.dispose();
+    midCycleAgeCtrl.dispose();
+    openingFeedCtrl.dispose();
+    openingCostCtrl.dispose();
     super.dispose();
   }
 
@@ -104,11 +115,25 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     return null;
   }
 
+  String? _nonNegativeNumber(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final n = double.tryParse(value.trim());
+    if (n == null || n < 0) return 'Enter a valid non-negative number';
+    return null;
+  }
+
+  String? _nonNegativeInteger(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final n = int.tryParse(value.trim());
+    if (n == null || n < 0) return 'Enter a valid non-negative whole number';
+    return null;
+  }
+
   Future<void> saveBatchToSupabase() async {
     if (!_formKey.currentState!.validate()) return;
 
     final initialBirds = int.tryParse(initialBirdsController.text.trim());
-    if (initialBirds == null || initialBirds <= 0) return;
+    if (initialBirds == null || initialBirds < (isMidCycle ? 0 : 1)) return;
 
     final finalCategory = productionCategory == 'Other'
         ? customCategoryController.text.trim()
@@ -144,6 +169,14 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
         'notes': notesController.text.trim(),
         'start_date': startDate.toIso8601String().split('T').first,
         'status': 'Active',
+
+        // Mid-cycle onboarding (all 0 for a batch that starts from day 1).
+        'start_age_days':
+            isMidCycle ? (int.tryParse(midCycleAgeCtrl.text.trim()) ?? 0) : 0,
+        'opening_feed_kg':
+            isMidCycle ? (double.tryParse(openingFeedCtrl.text.trim()) ?? 0) : 0,
+        'opening_cost':
+            isMidCycle ? (double.tryParse(openingCostCtrl.text.trim()) ?? 0) : 0,
       });
 
       if (!mounted) return;
@@ -568,16 +601,20 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            controller: initialBirdsController,
-                            keyboardType: TextInputType.number,
-                            decoration: _inputDecoration(
-                              'Initial birds *',
-                              hint: '500',
-                              icon: Icons.numbers_outlined,
+                            child: TextFormField(
+                              controller: initialBirdsController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration(
+                                isMidCycle
+                                    ? 'Birds alive today *'
+                                    : 'Initial birds *',
+                                hint: isMidCycle ? '480' : '500',
+                                icon: Icons.numbers_outlined,
+                              ),
+                              validator: isMidCycle
+                                  ? _nonNegativeInteger
+                                  : _positiveInteger,
                             ),
-                            validator: _positiveInteger,
-                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -598,6 +635,83 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    SwitchListTile(
+                      value: isMidCycle,
+                      onChanged: (v) => setState(() => isMidCycle = v),
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: colors.brand,
+                      title: const Text(
+                        'Mid-cycle batch (already running)',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'Turn on if this flock started before today and is being entered into the app now.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    if (isMidCycle) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: midCycleAgeCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration(
+                                'Current age (days) *',
+                                hint: '10',
+                                icon: Icons.calendar_month_outlined,
+                              ),
+                              validator: (v) => isMidCycle &&
+                                      (int.tryParse(v?.trim() ?? '') ?? -1) <
+                                          1
+                                  ? 'Enter the flock age in days (at least 1)'
+                                  : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: openingFeedCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: _inputDecoration(
+                                'Feed used so far (kg)',
+                                hint: '250',
+                                icon: Icons.agriculture_outlined,
+                              ),
+                              validator: _nonNegativeNumber,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: openingCostCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: _inputDecoration(
+                                'Cost incurred so far',
+                                hint: '15000',
+                                icon: Icons.payments_outlined,
+                                prefixText: '৳ ',
+                              ),
+                              validator: _nonNegativeNumber,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -614,16 +728,18 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                             color: colors.noticeIcon,
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Additional birds will start from 0. You can add birds later from the active batch.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                height: 1.35,
-                                color: colors.noticeText,
+                              Expanded(
+                                child: Text(
+                                  isMidCycle
+                                      ? 'Enter today\'s live bird count as "birds alive today" — earlier mortality is already reflected in it. Feed and cost used before today are captured as opening balances.'
+                                      : 'Additional birds will start from 0. You can add birds later from the active batch.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: colors.noticeText,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
                         ],
                       ),
                     ),

@@ -8,6 +8,15 @@ class Batch {
   final DateTime startDate;
   final int initialBirds;
 
+  /// Birds added later to a running batch (add1, add2, add3...).
+  final int additionalBirds;
+
+  /// Mid-cycle onboarding: the flock's age in days when it was entered into
+  /// the app, plus the feed and cost balances incurred before that day.
+  final int startAgeDays;
+  final double openingFeedKg;
+  final double openingCost;
+
   const Batch({
     required this.id,
     required this.userId,
@@ -17,7 +26,13 @@ class Batch {
     required this.breed,
     required this.startDate,
     required this.initialBirds,
+    this.additionalBirds = 0,
+    this.startAgeDays = 0,
+    this.openingFeedKg = 0,
+    this.openingCost = 0,
   });
+
+  int get totalBirds => initialBirds + additionalBirds;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -28,6 +43,10 @@ class Batch {
         'breed': breed,
         'start_date': startDate.toIso8601String(),
         'initial_birds': initialBirds,
+        'additional_birds': additionalBirds,
+        'start_age_days': startAgeDays,
+        'opening_feed_kg': openingFeedKg,
+        'opening_cost': openingCost,
       };
 
   factory Batch.fromJson(Map<String, dynamic> json) => Batch(
@@ -41,8 +60,77 @@ class Batch {
         startDate: DateTime.parse(
           '${json['start_date'] ?? json['startDate']}',
         ),
-        initialBirds: (json['initial_birds'] ?? json['initialBirds'] ?? 0) as int,
+        initialBirds: _jsonInt(json['initial_birds'] ?? json['initialBirds']),
+        additionalBirds:
+            _jsonInt(json['additional_birds'] ?? json['additionalBirds']),
+        startAgeDays: _jsonInt(json['start_age_days'] ?? json['startAgeDays']),
+        openingFeedKg:
+            _jsonDouble(json['opening_feed_kg'] ?? json['openingFeedKg']),
+        openingCost: _jsonDouble(json['opening_cost'] ?? json['openingCost']),
       );
+}
+
+/// One "add more birds" event on a running batch (add1, add2, add3...).
+class BirdAddition {
+  final String id;
+  final String userId;
+  final String batchId;
+  final int addNumber;
+  final DateTime addDate;
+  final int quantity;
+  final double pricePerBird;
+  final String source;
+  final String notes;
+
+  const BirdAddition({
+    required this.id,
+    required this.userId,
+    required this.batchId,
+    required this.addNumber,
+    required this.addDate,
+    required this.quantity,
+    required this.pricePerBird,
+    required this.source,
+    required this.notes,
+  });
+
+  double get totalCost => quantity * pricePerBird;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'user_id': userId,
+        'batch_id': batchId,
+        'add_number': addNumber,
+        'add_date': addDate.toIso8601String(),
+        'quantity': quantity,
+        'price_per_bird': pricePerBird,
+        'source': source,
+        'notes': notes,
+      };
+
+  factory BirdAddition.fromJson(Map<String, dynamic> json) => BirdAddition(
+        id: '${json['id'] ?? ''}',
+        userId: '${json['user_id'] ?? ''}',
+        batchId: '${json['batch_id'] ?? json['batchId'] ?? ''}',
+        addNumber: _jsonInt(json['add_number'] ?? json['addNumber']),
+        addDate: DateTime.parse('${json['add_date'] ?? json['addDate']}'),
+        quantity: _jsonInt(json['quantity']),
+        pricePerBird:
+            _jsonDouble(json['price_per_bird'] ?? json['pricePerBird']),
+        source: '${json['source'] ?? ''}',
+        notes: '${json['notes'] ?? ''}',
+      );
+}
+
+int _jsonInt(dynamic v) {
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse('${v ?? ''}') ?? 0;
+}
+
+double _jsonDouble(dynamic v) {
+  if (v is num) return v.toDouble();
+  return double.tryParse('${v ?? ''}') ?? 0;
 }
 
 class DailyRecord {

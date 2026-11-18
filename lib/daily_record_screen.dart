@@ -238,11 +238,20 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   int get _initialBirds =>
       _int(_selectedBatch?['initial_birds'] ?? _selectedBatch?['total_birds']);
 
+  /// Birds added later to the running batch (add1, add2, add3...).
+  int get _addedBirds => _int(_selectedBatch?['additional_birds']);
+
+  /// Mid-cycle opening balances (set when an already-running batch is
+  /// onboarded into the app).
+  int get _startAgeDays => _int(_selectedBatch?['start_age_days']);
+  double get _openingFeedKg => _num(_selectedBatch?['opening_feed_kg']);
+  double get _openingCost => _num(_selectedBatch?['opening_cost']);
+
   int get _totalMortality =>
       _records.fold<int>(0, (s, r) => s + _int(r['mortality']));
 
   int get activeBirds {
-    final a = _initialBirds - _totalMortality;
+    final a = _initialBirds + _addedBirds - _totalMortality;
     return a < 0 ? 0 : a;
   }
 
@@ -257,7 +266,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       _selectedDate.month,
       _selectedDate.day,
     );
-    final diff = d.difference(s).inDays + 1;
+    final diff = d.difference(s).inDays + 1 + _startAgeDays;
     return diff < 0 ? 0 : diff;
   }
 
@@ -302,7 +311,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   double get dayTotal => daySavedTotal + sessionTotal;
 
   double get batchCumulative =>
-      _records.fold<double>(0, (s, r) => s + _rowTotal(r)) + _batchExpenses;
+      _records.fold<double>(0, (s, r) => s + _rowTotal(r)) +
+      _batchExpenses +
+      _openingCost;
 
   /// Cleaner, explicit version used by the UI.
   double get batchCumulativeAfterSave {
@@ -310,8 +321,14 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
         _records.fold<double>(0, (s, r) => s + _rowTotal(r)) -
         daySavedTotal -
         _editingSavedTotal;
-    return otherRowsTotal + dayTotal + _batchExpenses;
+    return otherRowsTotal + dayTotal + _batchExpenses + _openingCost;
   }
+
+  /// All feed ever given to the batch: opening balance (mid-cycle onboarding)
+  /// plus every session row.
+  double get totalFeedKg =>
+      _records.fold<double>(0, (s, r) => s + _num(r['feed_kg'])) +
+      _openingFeedKg;
 
   /// Live birds x average weight x selling price per kg.
   double get estimatedFlockValue =>
@@ -349,7 +366,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       final data = await _supabase
           .from('batches')
           .select(
-            'id, name, start_date, status, production_type, production_category, breed, initial_birds',
+            'id, name, start_date, status, production_type, production_category, breed, initial_birds, additional_birds, start_age_days, opening_feed_kg, opening_cost',
           )
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
