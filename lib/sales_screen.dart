@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,7 +11,6 @@ class SalesScreenNew extends StatefulWidget {
   State<SalesScreenNew> createState() => _SalesScreenNewState();
 }
 
-// Backward compatibility alias for main.dart
 class SalesScreenV2 extends StatelessWidget {
   const SalesScreenV2({super.key});
 
@@ -38,42 +38,31 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
   List<Map<String, dynamic>> batches = [];
   List<Map<String, dynamic>> sales = [];
+
   String? batchId;
+  String? editingSaleId;
+
   String type = 'Bird';
   DateTime date = DateTime.now();
+
   bool loading = true;
   bool saving = false;
+  bool stockLoading = false;
+  bool editMode = true;
 
-  // Daily records stats for current batch
-  int totalGoodEggsCollected = 0;
-  int totalDamagedEggsCollected = 0;
-  int totalEggsCollected = 0;
-  int totalMortality = 0;
-  bool loadingStats = false;
-
-  InputDecoration _dec(
-    String label, {
-    IconData? icon,
-    String? helperText,
-    String? suffixText,
-  }) =>
-      InputDecoration(
-        labelText: label,
-        prefixIcon: icon == null ? null : Icon(icon, size: 20),
-        helperText: helperText,
-        suffixText: suffixText,
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        border: const OutlineInputBorder(),
-      );
+  int _totalBirds = 0;
+  int _mortality = 0;
+  int _producedGood = 0;
+  int _producedDamaged = 0;
 
   @override
   void initState() {
     super.initState();
-    _qty.addListener(() => setState(() {}));
-    _weight.addListener(() => setState(() {}));
-    _price.addListener(() => setState(() {}));
+
+    _qty.addListener(_refresh);
+    _weight.addListener(_refresh);
+    _price.addListener(_refresh);
+
     _loadBatches();
   }
 
@@ -87,809 +76,522 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     super.dispose();
   }
 
-  void _msg(String text, {bool error = false}) {
-    final colors = context.colors;
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  InputDecoration _dec(String label, {IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: icon == null ? null : Icon(icon, size: 20),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+      border: const OutlineInputBorder(),
+    );
+  }
+
+  void _msg(String message, {bool error = false}) {
     if (!mounted) return;
+
+    final colors = context.colors;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(text),
+        content: Text(message),
         backgroundColor: error ? colors.error : colors.brand,
       ),
     );
   }
 
+  int _int(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
+  double _double(dynamic value) {
+    if (value == null) return 0;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString()) ?? 0;
+  }
+
+  String _dateString(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+  }
+
+  Map<String, dynamic>? get batch {
+    for (final b in batches) {
+      if (b['id']?.toString() == batchId) return b;
+    }
+    return null;
+  }
+
+  bool get isClosed {
+    final status = (batch?['status'] ?? 'Active')
+        .toString()
+        .toLowerCase();
+
+    return status != 'active' || batch?['closed_date'] != null;
+  }
+
+  bool get canEdit => editMode && !isClosed;
+
+  bool get isEggBatch {
+    final value = (batch?['production_type'] ?? '')
+        .toString()
+        .toLowerCase();
+
+    return value.contains('egg');
+  }
+
+  String? get eggPurpose {
+    final value = (batch?['egg_purpose'] ?? '')
+        .toString()
+        .toLowerCase()
+        .trim();
+
+    if (value == 'hatching') return 'hatching';
+    if (value == 'table') return 'table';
+
+    if (isEggBatch) return 'table';
+
+    return null;
+  }
+
+  String _label(Map<String, dynamic> b) {
+    final production = (b['production_type'] ?? '')
+        .toString()
+        .replaceAll(' Production', '');
+
+    final category = b['production_category'] ?? '';
+    final purpose = b['egg_purpose'] ?? '';
+
+    final tag = purpose.toString().isEmpty
+        ? ''
+        : purpose == 'hatching'
+            ? ' · Hatching'
+            : ' · Table';
+
+    return '${b['name']} ($production - $category$tag)';
+  }
+
+  List<String> get allowedTypes {
+    if (!isEggBatch) {
+      return const ['Bird', 'Litter'];
+    }
+
+    if (eggPurpose == 'hatching') {
+      return const [
+        'Hatching Eggs',
+        'Damaged Eggs',
+        'Litter',
+      ];
+    }
+
+    return const [
+      'Table Eggs',
+      'Damaged Eggs',
+      'Litter',
+    ];
+  }
+
+  void _syncType() {
+    if (!allowedTypes.contains(type)) {
+      type = allowedTypes.first;
+    }
+  }
+
+  // --------------------------------------------------
+  // STOCK CALCULATIONS
+  // --------------------------------------------------
+
+  int get soldBirds => _soldQuantity('Bird');
+
+  int get soldTable => _soldQuantity('Table Eggs');
+
+  int get soldHatching => _soldQuantity('Hatching Eggs');
+
+  int get soldDamaged => _soldQuantity('Damaged Eggs');
+
+  int get soldLitter => _soldQuantity('Litter');
+
+  int _soldQuantity(String saleType) {
+    return sales
+        .where((s) => s['sale_type'] == saleType)
+        .fold(0, (sum, s) => sum + _int(s['quantity']));
+  }
+
+  int get birdStockBeforeSales {
+    return (_totalBirds - _mortality).clamp(0, 1 << 30);
+  }
+
+  int get availableBirdStock {
+    return (birdStockBeforeSales - soldBirds).clamp(0, 1 << 30);
+  }
+
+  int get goodEggStock {
+    final sold = eggPurpose == 'hatching'
+        ? soldHatching
+        : soldTable;
+
+    return (_producedGood - sold).clamp(0, 1 << 30);
+  }
+
+  int get damagedEggStock {
+    return (_producedDamaged - soldDamaged).clamp(0, 1 << 30);
+  }
+
+  int get availableForCurrentType {
+    switch (type) {
+      case 'Bird':
+        return availableBirdStock;
+      case 'Table Eggs':
+      case 'Hatching Eggs':
+        return goodEggStock;
+      case 'Damaged Eggs':
+        return damagedEggStock;
+      default:
+        return 1 << 30;
+    }
+  }
+
+  // During editing, add back the current sale quantity.
+  int get stockAvailableForSave {
+    int available = availableForCurrentType;
+
+    if (editingSaleId != null) {
+      for (final s in sales) {
+        if (s['id']?.toString() == editingSaleId &&
+            s['sale_type'] == type) {
+          available += _int(s['quantity']);
+          break;
+        }
+      }
+    }
+
+    return available;
+  }
+
+  // --------------------------------------------------
+  // REVENUE
+  // --------------------------------------------------
+
+  double _calcAmount(Map<String, dynamic> s) {
+    final quantity = _int(s['quantity']);
+    final weight = _double(s['weight_kg']);
+    final price = _double(s['unit_price']);
+
+    if (s['sale_type'] == 'Bird' && weight > 0) {
+      return weight * price;
+    }
+
+    return quantity * price;
+  }
+
+  double get currentTotal {
+    final q = int.tryParse(_qty.text.trim()) ?? 0;
+    final w = double.tryParse(_weight.text.trim()) ?? 0;
+    final p = double.tryParse(_price.text.trim()) ?? 0;
+
+    if (type == 'Bird') {
+      return w * p;
+    }
+
+    return q * p;
+  }
+
+  double get birdSalesTotal => _revenueFor('Bird');
+
+  double get eggSalesTotal {
+    return sales
+        .where((s) =>
+            s['sale_type'] == 'Table Eggs' ||
+            s['sale_type'] == 'Hatching Eggs' ||
+            s['sale_type'] == 'Damaged Eggs')
+        .fold(0.0, (sum, s) => sum + _calcAmount(s));
+  }
+
+  double get litterSalesTotal => _revenueFor('Litter');
+
+  double _revenueFor(String saleType) {
+    return sales
+        .where((s) => s['sale_type'] == saleType)
+        .fold(0.0, (sum, s) => sum + _calcAmount(s));
+  }
+
+  double get totalRevenue {
+    return sales.fold(0.0, (sum, s) => sum + _calcAmount(s));
+  }
+
+  // --------------------------------------------------
+  // LOAD DATA
+  // --------------------------------------------------
+
   Future<void> _loadBatches() async {
     final user = client.auth.currentUser;
-    if (user == null) return;
+
+    if (user == null) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
+
     try {
       final rows = await client
           .from('batches')
           .select(
-              'id, name, production_type, production_category, breed, initial_birds, additional_birds, status')
+            'id, name, production_type, production_category, '
+            'breed, initial_birds, additional_birds, '
+            'status, egg_purpose, closed_date',
+          )
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
-      batches = List<Map<String, dynamic>>.from(rows)
-          .where((b) => (b['status'] ?? 'Active') == 'Active')
-          .toList();
+
+      batches = List<Map<String, dynamic>>.from(rows);
+
       if (batches.isNotEmpty) {
-        batchId = batches.first['id'] as String;
+        batchId = batches.first['id'].toString();
+        _syncType();
+        await _loadSalesAndStock();
       }
-      await _loadBatchData();
     } catch (e) {
       _msg('Failed to load batches: $e', error: true);
     }
+
     if (mounted) setState(() => loading = false);
   }
 
-  Future<void> _loadBatchData() async {
-    await Future.wait([
-      _loadSales(),
-      _loadBatchStats(),
-    ]);
-  }
-
-  Future<void> _loadSales() async {
+  Future<void> _loadSalesAndStock() async {
     if (batchId == null) return;
+
+    setState(() => stockLoading = true);
+
     try {
-      final rows = await client
+      final salesRows = await client
           .from('sales')
           .select()
           .eq('batch_id', batchId!)
           .order('sale_date', ascending: false);
-      if (mounted) {
-        setState(() => sales = List<Map<String, dynamic>>.from(rows));
-      }
-    } catch (e) {
-      _msg('Failed to load sales: $e', error: true);
-    }
-  }
 
-  Future<void> _loadBatchStats() async {
-    if (batchId == null) return;
-    if (mounted) setState(() => loadingStats = true);
-    try {
-      final records = await client
-          .from('daily_records')
-          .select('eggs_collected, eggs_good, eggs_damaged, mortality')
+      // Total birds from the existing database VIEW.
+      final totalRows = await client
+          .from('batch_bird_totals')
+          .select('total_birds')
           .eq('batch_id', batchId!);
 
+      int totalBirds = 0;
+
+      if (totalRows.isNotEmpty) {
+        totalBirds = _int(totalRows.first['total_birds']);
+      }
+
+      // Daily mortality and egg production.
+      final dailyRows = await client
+          .from('daily_records')
+          .select(
+            'mortality, eggs_good, eggs_damaged, eggs_collected',
+          )
+          .eq('batch_id', batchId!);
+
+      int mortality = 0;
       int good = 0;
       int damaged = 0;
-      int total = 0;
-      int mort = 0;
 
-      for (final r in records) {
-        final g = (r['eggs_good'] as num?)?.toInt() ?? 0;
-        final d = (r['eggs_damaged'] as num?)?.toInt() ?? 0;
-        final t = (r['eggs_collected'] as num?)?.toInt() ?? 0;
-        final m = (r['mortality'] as num?)?.toInt() ?? 0;
+      for (final r in List<Map<String, dynamic>>.from(dailyRows)) {
+        mortality += _int(r['mortality']);
 
-        good += (g > 0 ? g : (t - d > 0 ? t - d : 0));
+        int g = _int(r['eggs_good']);
+        final d = _int(r['eggs_damaged']);
+
+        // Support older daily records.
+        if (g == 0 && d == 0) {
+          g = _int(r['eggs_collected']);
+        }
+
+        good += g;
         damaged += d;
-        total += (t > 0 ? t : (g + d));
-        mort += m;
       }
 
-      if (mounted) {
-        setState(() {
-          totalGoodEggsCollected = good;
-          totalDamagedEggsCollected = damaged;
-          totalEggsCollected = total;
-          totalMortality = mort;
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        sales = List<Map<String, dynamic>>.from(salesRows);
+        _totalBirds = totalBirds;
+        _mortality = mortality;
+        _producedGood = good;
+        _producedDamaged = damaged;
+      });
     } catch (e) {
-      debugPrint('Failed to load batch daily records: $e');
-    } finally {
-      if (mounted) setState(() => loadingStats = false);
+      _msg('Failed to load sales/stock: $e', error: true);
+    }
+
+    if (mounted) {
+      setState(() => stockLoading = false);
     }
   }
 
-  Map<String, dynamic>? get batch =>
-      batches.where((b) => b['id'] == batchId).firstOrNull;
+  // --------------------------------------------------
+  // FORM RESET / EDIT
+  // --------------------------------------------------
 
-  bool get isEggBatch {
-    final cur = batch;
-    if (cur == null) return false;
-    final t = (cur['production_type'] ?? '').toString().toLowerCase();
-    final c = (cur['production_category'] ?? '').toString().toLowerCase();
-    return t.contains('egg') ||
-        t.contains('layer') ||
-        c.contains('layer') ||
-        c.contains('breeder') ||
-        totalEggsCollected > 0;
+  void _clearForm() {
+    editingSaleId = null;
+    _qty.clear();
+    _weight.clear();
+    _price.clear();
+    _buyer.clear();
+    _remarks.clear();
+    date = DateTime.now();
+
+    if (mounted) setState(() {});
   }
 
-  String _label(Map<String, dynamic> b) {
-    final t = (b['production_type'] ?? '')
-        .toString()
-        .replaceAll(' Production', '');
-    final c = (b['production_category'] ?? '').toString();
-    return '${b['name']} ($t - $c)';
+  void _editSale(Map<String, dynamic> sale) {
+    if (!canEdit) return;
+
+    editingSaleId = sale['id'].toString();
+
+    type = sale['sale_type']?.toString() ?? 'Bird';
+
+    _qty.text = _int(sale['quantity']).toString();
+    _weight.text = sale['weight_kg'] == null
+        ? ''
+        : _double(sale['weight_kg']).toString();
+
+    _price.text = _double(sale['unit_price']).toString();
+
+    _buyer.text = (sale['buyer_name'] ?? '').toString();
+    _remarks.text = (sale['remarks'] ?? '').toString();
+
+    date = DateTime.tryParse(
+          sale['sale_date']?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    setState(() {});
+
+    _msg('Editing existing sale entry');
   }
 
-  // Live total calculation for main entry form
-  double get currentTotal {
-    final q = int.tryParse(_qty.text.trim()) ?? 0;
-    final w = double.tryParse(_weight.text.trim()) ?? 0.0;
-    final p = double.tryParse(_price.text.trim()) ?? 0.0;
-
-    if (type == 'Bird') {
-      if (w > 0) return w * p;
-      return q * p;
-    }
-    return q * p;
-  }
-
-  // Calculate amount for any sale record
-  double _calcAmount(Map<String, dynamic> s) {
-    final q = (s['quantity'] ?? 0) as num;
-    final w = (s['weight_kg'] as num?)?.toDouble();
-    final p = ((s['unit_price'] ?? 0) as num).toDouble();
-    final t = s['sale_type'] ?? '';
-
-    if (t == 'Bird' && w != null && w > 0) {
-      return w * p;
-    }
-    return q * p;
-  }
-
-  // Sales totals
-  double get birdSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Bird')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  int get birdsSoldQty => sales
-      .where((s) => s['sale_type'] == 'Bird')
-      .fold(0, (sum, s) => sum + ((s['quantity'] ?? 0) as int));
-
-  double get tableEggSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Table Eggs')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  double get hatchingEggSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Hatching Eggs')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  double get damagedEggSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Damaged Eggs')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  double get eggSalesTotal =>
-      tableEggSalesTotal + hatchingEggSalesTotal + damagedEggSalesTotal;
-
-  double get litterSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Litter')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  double get totalRevenue =>
-      sales.fold(0.0, (sum, s) => sum + _calcAmount(s));
-
-  // Egg sales quantities
-  int get soldTableEggsQty => sales
-      .where((s) => s['sale_type'] == 'Table Eggs')
-      .fold(0, (sum, s) => sum + ((s['quantity'] as num?)?.toInt() ?? 0));
-
-  int get soldHatchingEggsQty => sales
-      .where((s) => s['sale_type'] == 'Hatching Eggs')
-      .fold(0, (sum, s) => sum + ((s['quantity'] as num?)?.toInt() ?? 0));
-
-  int get soldGoodEggsQty => soldTableEggsQty + soldHatchingEggsQty;
-
-  int get soldDamagedEggsQty => sales
-      .where((s) => s['sale_type'] == 'Damaged Eggs')
-      .fold(0, (sum, s) => sum + ((s['quantity'] as num?)?.toInt() ?? 0));
-
-  int get soldTotalEggsQty => soldGoodEggsQty + soldDamagedEggsQty;
-
-  // Available in-stock eggs
-  int get availableGoodEggs =>
-      (totalGoodEggsCollected - soldGoodEggsQty).clamp(0, 99999999);
-
-  int get availableDamagedEggs =>
-      (totalDamagedEggsCollected - soldDamagedEggsQty).clamp(0, 99999999);
-
-  int get availableTotalEggs =>
-      (totalEggsCollected - soldTotalEggsQty).clamp(0, 99999999);
-
-  // Helper for available egg stock when creating or editing
-  int _availableStockFor(String saleType, {int currentEditingQty = 0}) {
-    if (saleType == 'Table Eggs' || saleType == 'Hatching Eggs') {
-      final base = totalGoodEggsCollected - soldGoodEggsQty + currentEditingQty;
-      return base < 0 ? 0 : base;
-    } else if (saleType == 'Damaged Eggs') {
-      final base =
-          totalDamagedEggsCollected - soldDamagedEggsQty + currentEditingQty;
-      return base < 0 ? 0 : base;
-    }
-    return 0;
-  }
+  // --------------------------------------------------
+  // SAVE / UPDATE
+  // --------------------------------------------------
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || batchId == null) return;
+    if (!canEdit || batchId == null) return;
+
+    if (!_formKey.currentState!.validate()) return;
+
+    final user = client.auth.currentUser;
+
+    if (user == null) {
+      _msg('Please login first', error: true);
+      return;
+    }
 
     final q = int.tryParse(_qty.text.trim());
     final p = double.tryParse(_price.text.trim());
-    final w = type == 'Bird' ? double.tryParse(_weight.text.trim()) : null;
+    final w = type == 'Bird'
+        ? double.tryParse(_weight.text.trim())
+        : null;
 
-    if (q == null || q <= 0) {
-      _msg('Enter valid quantity', error: true);
+    if (q == null || q <= 0 || p == null || p < 0) {
+      _msg('Invalid quantity or price', error: true);
       return;
     }
-    if (p == null || p < 0) {
-      _msg('Enter valid price', error: true);
-      return;
-    }
+
     if (type == 'Bird' && (w == null || w <= 0)) {
-      _msg('Please enter total live weight in kg', error: true);
+      _msg('Enter total live weight in kg', error: true);
       return;
     }
 
-    // Egg stock validation
-    if (type == 'Table Eggs' || type == 'Hatching Eggs') {
-      final avail = _availableStockFor(type);
-      if (totalGoodEggsCollected > 0 && q > avail) {
+    if (type != 'Damaged Eggs' && p <= 0) {
+      _msg('Price must be greater than zero', error: true);
+      return;
+    }
+
+    // Prevent overselling.
+    if (type != 'Litter') {
+      final available = stockAvailableForSave;
+
+      if (q > available) {
         _msg(
-          'পর্যাপ্ত ভালো ডিম স্টকে নেই! স্টকে অবশিষ্ট: $avail টি (অনুরোধ: $q টি)',
+          'Not enough stock. Available: $available',
           error: true,
         );
         return;
       }
-    } else if (type == 'Damaged Eggs') {
-      final avail = _availableStockFor(type);
-      if (totalDamagedEggsCollected > 0 && q > avail) {
-        _msg(
-          'পর্যাপ্ত ভাঙা ডিম স্টকে নেই! স্টকে অবশিষ্ট: $avail টি (অনুরোধ: $q টি)',
-          error: true,
-        );
-        return;
-      }
+    }
+
+    // Egg purpose validation.
+    if (type == 'Table Eggs' && eggPurpose == 'hatching') {
+      _msg('This is a hatching batch', error: true);
+      return;
+    }
+
+    if (type == 'Hatching Eggs' && eggPurpose == 'table') {
+      _msg('This is a table egg batch', error: true);
+      return;
     }
 
     setState(() => saving = true);
+
     try {
-      await client.from('sales').insert({
-        'user_id': client.auth.currentUser!.id,
+      final data = {
+        'user_id': user.id,
         'batch_id': batchId,
-        'sale_date': date.toIso8601String().split('T').first,
+        'sale_date': _dateString(date),
         'sale_type': type,
         'quantity': q,
         'weight_kg': w,
         'unit_price': p,
         'buyer_name': _buyer.text.trim(),
         'remarks': _remarks.text.trim(),
-      });
+      };
 
-      _qty.clear();
-      _weight.clear();
-      _price.clear();
-      _buyer.clear();
-      _remarks.clear();
+      if (editingSaleId == null) {
+        await client.from('sales').insert(data);
+        _msg('Sale saved successfully');
+      } else {
+        await client
+            .from('sales')
+            .update(data)
+            .eq('id', editingSaleId!)
+            .eq('user_id', user.id);
 
-      _msg('Sale saved successfully');
-      await _loadBatchData();
+        _msg('Sale updated successfully');
+      }
+
+      _clearForm();
+      await _loadSalesAndStock();
     } catch (e) {
       _msg('Save failed: $e', error: true);
     }
+
     if (mounted) setState(() => saving = false);
   }
 
-  Future<void> _openEditSaleSheet(Map<String, dynamic> sale) async {
+  // --------------------------------------------------
+  // DELETE
+  // --------------------------------------------------
+
+  Future<bool> _delete(Map<String, dynamic> sale) async {
+    if (!canEdit) return false;
+
     final colors = context.colors;
-    final editQtyCtrl =
-        TextEditingController(text: '${sale['quantity'] ?? ''}');
-    final editWeightCtrl =
-        TextEditingController(text: '${sale['weight_kg'] ?? ''}');
-    final editPriceCtrl =
-        TextEditingController(text: '${sale['unit_price'] ?? ''}');
-    final editBuyerCtrl =
-        TextEditingController(text: '${sale['buyer_name'] ?? ''}');
-    final editRemarksCtrl =
-        TextEditingController(text: '${sale['remarks'] ?? ''}');
 
-    String editType = (sale['sale_type'] ?? 'Bird').toString();
-    if (!types.contains(editType)) {
-      editType = types.first;
-    }
-
-    DateTime editDate = DateTime.tryParse('${sale['sale_date']}') ?? DateTime.now();
-    final originalQty = (sale['quantity'] as num?)?.toInt() ?? 0;
-    final originalType = sale['sale_type']?.toString();
-    final formKey = GlobalKey<FormState>();
-    bool isUpdating = false;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            double calcEditTotal() {
-              final q = int.tryParse(editQtyCtrl.text.trim()) ?? 0;
-              final w = double.tryParse(editWeightCtrl.text.trim()) ?? 0.0;
-              final p = double.tryParse(editPriceCtrl.text.trim()) ?? 0.0;
-              if (editType == 'Bird') {
-                if (w > 0) return w * p;
-                return q * p;
-              }
-              return q * p;
-            }
-
-            final editAvailStock = _availableStockFor(
-              editType,
-              currentEditingQty: (editType == originalType) ? originalQty : 0,
-            );
-
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              child: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.edit_note, color: colors.brand),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Edit Sale Record',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: colors.ink,
-                                ),
-                              ),
-                            ],
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(ctx),
-                          ),
-                        ],
-                      ),
-                      const Divider(),
-                      const SizedBox(height: 6),
-                      DropdownButtonFormField<String>(
-                        value: editType,
-                        isExpanded: true,
-                        decoration: _dec('Sale type', icon: Icons.category),
-                        items: types
-                            .map((t) =>
-                                DropdownMenuItem(value: t, child: Text(t)))
-                            .toList(),
-                        onChanged: (v) {
-                          if (v != null) {
-                            setSheetState(() => editType = v);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 10),
-
-                      // Stock hint for egg sales
-                      if (editType == 'Table Eggs' ||
-                          editType == 'Hatching Eggs' ||
-                          editType == 'Damaged Eggs') ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: colors.noticeBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: colors.noticeBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.inventory_2_outlined,
-                                  size: 16, color: colors.noticeIcon),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  editType == 'Damaged Eggs'
-                                      ? 'Available Damaged Eggs: $editAvailStock pcs (incl. current record)'
-                                      : 'Available Good Eggs: $editAvailStock pcs (incl. current record)',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: colors.noticeText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-
-                      if (editType == 'Bird') ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: editQtyCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration:
-                                    _dec('Birds count', icon: Icons.numbers),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = int.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Enter quantity';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: editWeightCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration:
-                                    _dec('Weight (kg)', icon: Icons.scale),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = double.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Enter weight';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextFormField(
-                          controller: editPriceCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
-                          decoration:
-                              _dec('Price (tk/kg)', icon: Icons.payments),
-                          onChanged: (_) => setSheetState(() {}),
-                          validator: (v) {
-                            final n = double.tryParse((v ?? '').trim());
-                            if (n == null || n <= 0) return 'Enter rate';
-                            return null;
-                          },
-                        ),
-                        // Live avg weight preview
-                        Builder(
-                          builder: (_) {
-                            final q = int.tryParse(editQtyCtrl.text.trim()) ?? 0;
-                            final w =
-                                double.tryParse(editWeightCtrl.text.trim()) ??
-                                    0.0;
-                            if (q > 0 && w > 0) {
-                              final avg = w / q;
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  'Avg Weight: ${avg.toStringAsFixed(2)} kg/bird',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.brand,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ] else if (editType == 'Table Eggs' ||
-                          editType == 'Hatching Eggs' ||
-                          editType == 'Damaged Eggs') ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: editQtyCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration:
-                                    _dec('Egg count (pcs)', icon: Icons.egg),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = int.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Enter eggs';
-                                  }
-                                  final maxStock = _availableStockFor(
-                                    editType,
-                                    currentEditingQty: (editType == originalType)
-                                        ? originalQty
-                                        : 0,
-                                  );
-                                  final totalRef = (editType == 'Damaged Eggs')
-                                      ? totalDamagedEggsCollected
-                                      : totalGoodEggsCollected;
-                                  if (totalRef > 0 && n > maxStock) {
-                                    return 'Max available: $maxStock';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: editPriceCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration:
-                                    _dec('Price (tk/pc)', icon: Icons.payments),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = double.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) return 'Enter rate';
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ] else ...[
-                        // Litter
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: editQtyCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: _dec('Sacks (বস্তা)',
-                                    icon: Icons.shopping_bag),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = int.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) {
-                                    return 'Enter sacks';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: editPriceCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                        decimal: true),
-                                decoration: _dec('Price (tk/sack)',
-                                    icon: Icons.payments),
-                                onChanged: (_) => setSheetState(() {}),
-                                validator: (v) {
-                                  final n = double.tryParse((v ?? '').trim());
-                                  if (n == null || n <= 0) return 'Enter rate';
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 10),
-                      // Live Edit Total Card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: colors.successSoft,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: colors.brandSoft),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Updated Total:',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: colors.brand,
-                              ),
-                            ),
-                            Text(
-                              '${calcEditTotal().toStringAsFixed(2)} tk',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: colors.brand,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: editBuyerCtrl,
-                              decoration: _dec('Buyer name (optional)',
-                                  icon: Icons.person),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextFormField(
-                              controller: editRemarksCtrl,
-                              decoration: _dec('Remarks', icon: Icons.comment),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                              'Date: ${editDate.toIso8601String().split('T').first}'),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: () async {
-                              final d = await showDatePicker(
-                                context: context,
-                                initialDate: editDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime.now(),
-                              );
-                              if (d != null) {
-                                setSheetState(() => editDate = d);
-                              }
-                            },
-                            child: const Text('Change Date'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: isUpdating ? null : () => Navigator.pop(ctx),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: FilledButton.icon(
-                              onPressed: isUpdating
-                                  ? null
-                                  : () async {
-                                      if (!formKey.currentState!.validate()) {
-                                        return;
-                                      }
-
-                                      final nq = int.tryParse(
-                                          editQtyCtrl.text.trim());
-                                      final np = double.tryParse(
-                                          editPriceCtrl.text.trim());
-                                      final nw = editType == 'Bird'
-                                          ? double.tryParse(
-                                              editWeightCtrl.text.trim())
-                                          : null;
-
-                                      if (nq == null || nq <= 0) return;
-                                      if (np == null || np < 0) return;
-
-                                      // Stock check
-                                      if (editType == 'Table Eggs' ||
-                                          editType == 'Hatching Eggs' ||
-                                          editType == 'Damaged Eggs') {
-                                        final maxAvail = _availableStockFor(
-                                          editType,
-                                          currentEditingQty:
-                                              (editType == originalType)
-                                                  ? originalQty
-                                                  : 0,
-                                        );
-                                        final totalRef =
-                                            (editType == 'Damaged Eggs')
-                                                ? totalDamagedEggsCollected
-                                                : totalGoodEggsCollected;
-                                        if (totalRef > 0 && nq > maxAvail) {
-                                          _msg(
-                                            'Cannot exceed available stock ($maxAvail pcs)',
-                                            error: true,
-                                          );
-                                          return;
-                                        }
-                                      }
-
-                                      setSheetState(() => isUpdating = true);
-                                      try {
-                                        await client
-                                            .from('sales')
-                                            .update({
-                                              'sale_type': editType,
-                                              'quantity': nq,
-                                              'weight_kg': nw,
-                                              'unit_price': np,
-                                              'buyer_name':
-                                                  editBuyerCtrl.text.trim(),
-                                              'remarks':
-                                                  editRemarksCtrl.text.trim(),
-                                              'sale_date': editDate
-                                                  .toIso8601String()
-                                                  .split('T')
-                                                  .first,
-                                            })
-                                            .eq('id', sale['id']);
-
-                                        if (mounted) {
-                                          Navigator.pop(ctx);
-                                          _msg('Sale updated successfully');
-                                          await _loadBatchData();
-                                        }
-                                      } catch (e) {
-                                        _msg('Update failed: $e', error: true);
-                                      } finally {
-                                        setSheetState(() => isUpdating = false);
-                                      }
-                                    },
-                              icon: isUpdating
-                                  ? SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: colors.card,
-                                      ),
-                                    )
-                                  : const Icon(Icons.check),
-                              label: const Text('Update Sale'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    editQtyCtrl.dispose();
-    editWeightCtrl.dispose();
-    editPriceCtrl.dispose();
-    editBuyerCtrl.dispose();
-    editRemarksCtrl.dispose();
-  }
-
-  Future<bool> _delete(Map<String, dynamic> s) async {
-    final colors = context.colors;
-    final ok = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Delete sale record?'),
         content: Text(
-            '${s['sale_type']} • ${_calcAmount(s).toStringAsFixed(2)} tk'),
+          '${sale['sale_type']} • '
+          '${_calcAmount(sale).toStringAsFixed(2)} tk',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(c, false),
@@ -897,19 +599,31 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(c, true),
-            child: Text('Delete', style: TextStyle(color: colors.error)),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: colors.error),
+            ),
           ),
         ],
       ),
     );
 
-    if (ok != true) return false;
+    if (confirmed != true) return false;
 
     try {
-      await client.from('sales').delete().eq('id', s['id']);
-      setState(() => sales.remove(s));
-      _msg('Record deleted');
-      await _loadBatchData();
+      final user = client.auth.currentUser;
+      if (user == null) return false;
+
+      await client
+          .from('sales')
+          .delete()
+          .eq('id', sale['id'])
+          .eq('user_id', user.id);
+
+      _msg('Sale record deleted');
+
+      await _loadSalesAndStock();
+
       return true;
     } catch (e) {
       _msg('Delete failed: $e', error: true);
@@ -917,696 +631,735 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     }
   }
 
-  // Stock inventory card
-  Widget _buildInventoryBalanceCard(AppColors colors) {
-    final curBatch = batch;
-    final initialBirds = (curBatch?['initial_birds'] ?? 0) as int;
-    final addBirds = (curBatch?['additional_birds'] ?? 0) as int;
-    final totalBirdsIn = initialBirds + addBirds;
-    final remainingBirds = totalBirdsIn - totalMortality - birdsSoldQty;
+  // --------------------------------------------------
+  // STOCK BANNER
+  // --------------------------------------------------
 
-    return Card(
-      elevation: 0,
-      color: colors.soft,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: colors.line),
-      ),
-      child: Padding(
+  Widget _stockBanner(AppColors colors) {
+    if (!isEggBatch) {
+      return Container(
         padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.brandSoft,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colors.line),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.inventory_2, size: 18, color: colors.brand),
-                const SizedBox(width: 8),
-                Text(
-                  'স্টক ও ইনভেন্টরি সমন্বয় (Live Stock Balance)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: colors.ink,
-                  ),
-                ),
-              ],
+            Text(
+              'Bird Stock',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: colors.brand,
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
-            // Bird stock line
-            Row(
-              children: [
-                Icon(Icons.pets, size: 15, color: colors.inkAlt),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'মুরগি: মোট $totalBirdsIn | মৃত্যু $totalMortality | বিক্রি $birdsSoldQty | বাকি: $remainingBirds পাখি',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: colors.ink,
-                    ),
-                  ),
-                ),
-              ],
+            _stockRow('Initial birds', _int(batch?['initial_birds'])),
+            _stockRow('Additional birds',
+                _totalBirds - _int(batch?['initial_birds'])),
+            _stockRow('Total birds', _totalBirds),
+            _stockRow('Mortality', -_mortality),
+            _stockRow('Birds sold', -soldBirds),
+
+            const Divider(),
+
+            _stockRow(
+              'Available birds',
+              availableBirdStock,
+              bold: true,
             ),
 
-            if (isEggBatch || totalEggsCollected > 0) ...[
-              const Divider(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.egg, size: 15, color: colors.warning),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'ভালো ডিম: সংগ্রহ $totalGoodEggsCollected | বিক্রি $soldGoodEggsQty (টেবিল: $soldTableEggsQty, হ্যাচিং: $soldHatchingEggsQty)',
-                          style: TextStyle(fontSize: 12, color: colors.inkAlt),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Text(
-                              '👉 স্টকে অবশিষ্ট ভালো ডিম: ',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: colors.ink,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: availableGoodEggs > 0
-                                    ? colors.successSoft
-                                    : colors.errorSoft,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                '$availableGoodEggs টি',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: availableGoodEggs > 0
-                                      ? colors.brand
-                                      : colors.error,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.egg_outlined, size: 15, color: colors.error),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Text(
-                          'ভাঙা ডিম: সংগ্রহ $totalDamagedEggsCollected | বিক্রি $soldDamagedEggsQty | বাকি: ',
-                          style: TextStyle(fontSize: 12, color: colors.inkAlt),
-                        ),
-                        Text(
-                          '$availableDamagedEggs টি',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: colors.ink,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            if (stockLoading)
+              const LinearProgressIndicator(minHeight: 2),
           ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    if (loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (batches.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Sales')),
-        body: const Center(
-          child: Text('No active batch found. Please add a batch first.'),
         ),
       );
     }
 
-    final isEgg =
-        (type == 'Table Eggs' || type == 'Hatching Eggs' || type == 'Damaged Eggs');
-    final activeStockAvail = _availableStockFor(type);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.successSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.brandSoft),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Egg Stock',
+            style: TextStyle(
+              color: colors.brand,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _stockRow('Good eggs produced', _producedGood),
+          _stockRow('Good eggs sold',
+              eggPurpose == 'hatching' ? soldHatching : soldTable),
+          _stockRow('Good eggs available', goodEggStock, bold: true),
+          const Divider(),
+          _stockRow('Damaged eggs produced', _producedDamaged),
+          _stockRow('Damaged eggs sold', soldDamaged),
+          _stockRow('Damaged eggs available', damagedEggStock,
+              bold: true),
+          if (stockLoading)
+            const LinearProgressIndicator(minHeight: 2),
+        ],
+      ),
+    );
+  }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sales & Stock'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadBatchData,
+  Widget _stockRow(String label, int value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+          Text(
+            value.toString(),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: bold ? context.colors.brand : null,
+            ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadBatchData,
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            // Batch selector
-            DropdownButtonFormField<String>(
-              value: batchId,
-              isExpanded: true,
-              decoration: _dec('Batch', icon: Icons.inventory_2),
-              items: batches
-                  .map((b) => DropdownMenuItem(
-                        value: b['id'] as String,
-                        child: Text(
-                          _label(b),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (v) {
-                setState(() => batchId = v);
-                _loadBatchData();
-              },
+    );
+  }
+
+  // --------------------------------------------------
+  // ENTRY FORM
+  // --------------------------------------------------
+
+  Widget _saleForm(AppColors colors) {
+    final allowed = allowedTypes;
+
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            value: batchId,
+            isExpanded: true,
+            decoration: _dec('Batch', icon: Icons.inventory_2),
+            items: batches.map((b) {
+              return DropdownMenuItem<String>(
+                value: b['id'].toString(),
+                child: Text(
+                  _label(b),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (v) async {
+              if (v == null) return;
+
+              _clearForm();
+
+              setState(() {
+                batchId = v;
+                _syncType();
+              });
+
+              await _loadSalesAndStock();
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          _stockBanner(colors),
+
+          const SizedBox(height: 12),
+
+          DropdownButtonFormField<String>(
+            value: allowed.contains(type) ? type : allowed.first,
+            isExpanded: true,
+            decoration: _dec('Sale type', icon: Icons.category),
+            items: allowed.map((t) {
+              return DropdownMenuItem(value: t, child: Text(t));
+            }).toList(),
+            onChanged: (v) {
+              if (v == null) return;
+
+              setState(() {
+                type = v;
+                _qty.clear();
+                _weight.clear();
+                _price.clear();
+              });
+            },
+          ),
+
+          const SizedBox(height: 12),
+
+          if (type == 'Bird') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _qty,
+                    keyboardType: TextInputType.number,
+                    decoration: _dec(
+                      'Bird count',
+                      icon: Icons.numbers,
+                    ),
+                    validator: (v) {
+                      final n = int.tryParse((v ?? '').trim());
+
+                      if (n == null || n <= 0) {
+                        return 'Enter quantity';
+                      }
+
+                      if (n > stockAvailableForSave) {
+                        return 'Max $stockAvailableForSave';
+                      }
+
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _weight,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _dec(
+                      'Weight (kg)',
+                      icon: Icons.scale,
+                    ),
+                    validator: (v) {
+                      final n = double.tryParse((v ?? '').trim());
+
+                      if (n == null || n <= 0) {
+                        return 'Enter weight';
+                      }
+
+                      return null;
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-
-            // Live Stock Balance Card
-            _buildInventoryBalanceCard(colors),
-            const SizedBox(height: 12),
-
-            // Sales Entry Form
-            Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: type,
-                    isExpanded: true,
-                    decoration: _dec('Sale type', icon: Icons.category),
-                    items: types
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (v) => setState(() => type = v!),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Stock indicator for selected egg type
-                  if (isEgg) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: activeStockAvail > 0
-                            ? colors.noticeBg
-                            : colors.errorSoft,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: activeStockAvail > 0
-                              ? colors.noticeBorder
-                              : colors.errorBorder,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            activeStockAvail > 0
-                                ? Icons.check_circle_outline
-                                : Icons.warning_amber_outlined,
-                            size: 18,
-                            color: activeStockAvail > 0
-                                ? colors.noticeIcon
-                                : colors.errorText,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              type == 'Damaged Eggs'
-                                  ? 'স্টকে অবশিষ্ট ভাঙা ডিম: $activeStockAvail টি'
-                                  : 'স্টকে অবশিষ্ট ভালো ডিম: $activeStockAvail টি',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: activeStockAvail > 0
-                                    ? colors.noticeText
-                                    : colors.errorText,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-
-                  if (type == 'Bird') ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qty,
-                            keyboardType: TextInputType.number,
-                            decoration:
-                                _dec('Birds count', icon: Icons.numbers),
-                            validator: (v) {
-                              final n = int.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter quantity';
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _weight,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: _dec('Weight (kg)', icon: Icons.scale),
-                            validator: (v) {
-                              final n = double.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter weight';
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _price,
-                      keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
-                      decoration: _dec('Price (tk/kg)', icon: Icons.payments),
-                      validator: (v) {
-                        final n = double.tryParse((v ?? '').trim());
-                        if (n == null || n <= 0) return 'Enter rate';
-                        return null;
-                      },
-                    ),
-                    // Live Avg Weight Preview
-                    Builder(
-                      builder: (_) {
-                        final q = int.tryParse(_qty.text.trim()) ?? 0;
-                        final w = double.tryParse(_weight.text.trim()) ?? 0.0;
-                        if (q > 0 && w > 0) {
-                          final avg = w / q;
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              'গড় ওজন: ${avg.toStringAsFixed(2)} kg/bird',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colors.brand,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ] else if (isEgg) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qty,
-                            keyboardType: TextInputType.number,
-                            decoration: _dec(
-                              'Egg count (pcs)',
-                              icon: Icons.egg,
-                              helperText: '১ খাঁচি = ৩০ টি ডিম',
-                            ),
-                            validator: (v) {
-                              final n = int.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter eggs';
-                              final refTotal = (type == 'Damaged Eggs')
-                                  ? totalDamagedEggsCollected
-                                  : totalGoodEggsCollected;
-                              if (refTotal > 0 && n > activeStockAvail) {
-                                return 'স্টকে বাকি মাত্র $activeStockAvail টি';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _price,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration:
-                                _dec('Price (tk/pc)', icon: Icons.payments),
-                            validator: (v) {
-                              final n = double.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter rate';
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ] else ...[
-                    // Litter
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qty,
-                            keyboardType: TextInputType.number,
-                            decoration: _dec('Sacks (বস্তা)',
-                                icon: Icons.shopping_bag),
-                            validator: (v) {
-                              final n = int.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter sacks';
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _price,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration:
-                                _dec('Price (tk/sack)', icon: Icons.payments),
-                            validator: (v) {
-                              final n = double.tryParse((v ?? '').trim());
-                              if (n == null || n <= 0) return 'Enter rate';
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  const SizedBox(height: 10),
-                  // Live Total Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: colors.successSoft,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: colors.brandSoft),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Estimated Total:',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: colors.brand,
-                          ),
-                        ),
-                        Text(
-                          '${currentTotal.toStringAsFixed(2)} tk',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: colors.brand,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _buyer,
-                          decoration:
-                              _dec('Buyer name (optional)', icon: Icons.person),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _remarks,
-                          decoration: _dec('Remarks', icon: Icons.comment),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Date: ${date.toIso8601String().split('T').first}'),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () async {
-                          final d = await showDatePicker(
-                            context: context,
-                            initialDate: date,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now(),
-                          );
-                          if (d != null) setState(() => date = d);
-                        },
-                        child: const Text('Change Date'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: saving ? null : _save,
-                      icon: saving
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colors.card,
-                              ),
-                            )
-                          : const Icon(Icons.save),
-                      label: const Text('Save Sale'),
-                    ),
-                  ),
-                ],
+            TextFormField(
+              controller: _price,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: _dec(
+                'Price (tk/kg)',
+                icon: Icons.payments,
               ),
+              validator: (v) {
+                final n = double.tryParse((v ?? '').trim());
+                if (n == null || n <= 0) return 'Enter rate';
+                return null;
+              },
             ),
-            const SizedBox(height: 16),
-
-            // Summary Card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _row('Bird sales', birdSalesTotal),
-                    _row('Table Egg sales', tableEggSalesTotal),
-                    _row('Hatching Egg sales', hatchingEggSalesTotal),
-                    if (damagedEggSalesTotal > 0)
-                      _row('Damaged Egg sales', damagedEggSalesTotal),
-                    _row('Litter sales', litterSalesTotal),
-                    const Divider(),
-                    _row('Total revenue', totalRevenue, bold: true),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
+          ] else if (type == 'Table Eggs' ||
+              type == 'Hatching Eggs' ||
+              type == 'Damaged Eggs') ...[
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Sales Records (${sales.length})',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: colors.ink,
+                Expanded(
+                  child: TextFormField(
+                    controller: _qty,
+                    keyboardType: TextInputType.number,
+                    decoration: _dec(
+                      'Egg count (pcs)',
+                      icon: Icons.egg,
+                    ),
+                    validator: (v) {
+                      final n = int.tryParse((v ?? '').trim());
+
+                      if (n == null || n <= 0) {
+                        return 'Enter eggs';
+                      }
+
+                      if (n > stockAvailableForSave) {
+                        return 'Max $stockAvailableForSave';
+                      }
+
+                      return null;
+                    },
                   ),
                 ),
-                Text(
-                  'Tap or Edit button to update',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colors.inkAlt,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _price,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _dec(
+                      'Price (tk/pc)',
+                      icon: Icons.payments,
+                    ),
+                    validator: (v) {
+                      final n = double.tryParse((v ?? '').trim());
+                      if (n == null || n < 0) return 'Enter rate';
+                      return null;
+                    },
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
+            Text(
+              'Available: $availableForCurrentType pcs',
+              style: TextStyle(
+                color: colors.brand,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _qty,
+                    keyboardType: TextInputType.number,
+                    decoration: _dec(
+                      'Sacks (বস্তা)',
+                      icon: Icons.shopping_bag,
+                    ),
+                    validator: (v) {
+                      final n = int.tryParse((v ?? '').trim());
+                      if (n == null || n <= 0) return 'Enter sacks';
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _price,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: _dec(
+                      'Price (tk/sack)',
+                      icon: Icons.payments,
+                    ),
+                    validator: (v) {
+                      final n = double.tryParse((v ?? '').trim());
+                      if (n == null || n <= 0) return 'Enter rate';
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
 
-            if (sales.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.receipt_long, size: 40, color: colors.muted),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No sales records yet for this batch',
-                        style: TextStyle(color: colors.inkAlt),
-                      ),
-                    ],
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.successSoft,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Estimated Total',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  '${currentTotal.toStringAsFixed(2)} tk',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: colors.brand,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _buyer,
+                  decoration: _dec(
+                    'Buyer name',
+                    icon: Icons.person,
                   ),
                 ),
               ),
-
-            ...sales.map((s) {
-              final amt = _calcAmount(s);
-              final t = s['sale_type'] ?? '';
-              final dateStr = s['sale_date'] ?? '';
-              final buyer = (s['buyer_name'] ?? '').toString();
-              String detail = '';
-              if (t == 'Bird') {
-                final q = s['quantity'] ?? 0;
-                final w = (s['weight_kg'] as num?)?.toDouble() ?? 0.0;
-                final p = s['unit_price'] ?? 0;
-                final avg = (q > 0 && w > 0) ? (w / q) : 0.0;
-                detail =
-                    '$q birds, ${w.toStringAsFixed(1)} kg @ $p tk/kg (${avg.toStringAsFixed(2)} kg/bird)';
-              } else if (t == 'Table Eggs' ||
-                  t == 'Hatching Eggs' ||
-                  t == 'Damaged Eggs') {
-                final q = s['quantity'] ?? 0;
-                final p = s['unit_price'] ?? 0;
-                detail = '$q pcs @ $p tk/pc';
-              } else {
-                final q = s['quantity'] ?? 0;
-                final p = s['unit_price'] ?? 0;
-                detail = '$q sacks @ $p tk/sack';
-              }
-              if (buyer.isNotEmpty) detail += ' • $buyer';
-
-              return Dismissible(
-                key: ValueKey(s['id']),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: colors.error,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Icon(Icons.delete, color: colors.card),
-                ),
-                confirmDismiss: (_) => _delete(s),
-                child: Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  elevation: 0,
-                  color: colors.card,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    side: BorderSide(color: colors.line),
-                  ),
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 2),
-                    leading: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: t == 'Bird'
-                          ? colors.brandSoft
-                          : t == 'Damaged Eggs'
-                              ? colors.errorSoft
-                              : t.toString().contains('Egg')
-                                  ? colors.warningSoft
-                                  : colors.soft,
-                      child: Icon(
-                        t == 'Bird'
-                            ? Icons.sell
-                            : t == 'Litter'
-                                ? Icons.shopping_bag
-                                : Icons.egg,
-                        size: 18,
-                        color: t == 'Bird'
-                            ? colors.brand
-                            : t == 'Damaged Eggs'
-                                ? colors.error
-                                : t.toString().contains('Egg')
-                                    ? colors.warning
-                                    : colors.inkAlt,
-                      ),
-                    ),
-                    title: Text(
-                      '$t  •  ${amt.toStringAsFixed(2)} tk',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: colors.ink,
-                      ),
-                    ),
-                    subtitle: Text(
-                      '$dateStr  |  $detail',
-                      style: TextStyle(color: colors.inkAlt, fontSize: 12),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.edit_outlined,
-                              size: 18, color: colors.brand),
-                          tooltip: 'Edit sale',
-                          onPressed: () => _openEditSaleSheet(s),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline,
-                              size: 18, color: colors.error),
-                          tooltip: 'Delete sale',
-                          onPressed: () => _delete(s),
-                        ),
-                      ],
-                    ),
-                    onTap: () => _openEditSaleSheet(s),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: _remarks,
+                  decoration: _dec(
+                    'Remarks',
+                    icon: Icons.comment,
                   ),
                 ),
-              );
-            }),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Date: ${_dateString(date)}'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final d = await showDatePicker(
+                    context: context,
+                    initialDate: date,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+
+                  if (d != null) setState(() => date = d);
+                },
+                child: const Text('Change'),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: saving ? null : _save,
+              icon: saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Icon(
+                      editingSaleId == null
+                          ? Icons.save
+                          : Icons.edit,
+                    ),
+              label: Text(
+                editingSaleId == null
+                    ? 'Save Sale'
+                    : 'Update Sale',
+              ),
+            ),
+          ),
+
+          if (editingSaleId != null)
+            Center(
+              child: TextButton.icon(
+                onPressed: _clearForm,
+                icon: const Icon(Icons.close),
+                label: const Text('Cancel Editing'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // --------------------------------------------------
+  // SUMMARY
+  // --------------------------------------------------
+
+  Widget _summary(AppColors colors) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            _revenueRow('Bird sales', birdSalesTotal),
+            _revenueRow('Egg sales', eggSalesTotal),
+            _revenueRow('Litter sales', litterSalesTotal),
+            const Divider(),
+            _revenueRow(
+              'Total revenue',
+              totalRevenue,
+              bold: true,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _row(String label, double val, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(
-              '${val.toStringAsFixed(2)} tk',
+  Widget _revenueRow(
+    String label,
+    double value, {
+    bool bold = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
               style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                fontWeight: bold ? FontWeight.bold : null,
               ),
             ),
-          ],
+          ),
+          Text(
+            '${value.toStringAsFixed(2)} tk',
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.bold : null,
+              color: bold ? context.colors.brand : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --------------------------------------------------
+  // RECENT SALES
+  // --------------------------------------------------
+
+  Widget _recentSales(AppColors colors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Recent Sales',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+
+        if (sales.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+              child: Text('No sales records yet'),
+            ),
+          ),
+
+        ...sales.map((s) {
+          final saleType = (s['sale_type'] ?? '').toString();
+          final amount = _calcAmount(s);
+
+          final quantity = _int(s['quantity']);
+          final weight = _double(s['weight_kg']);
+          final price = _double(s['unit_price']);
+
+          String detail;
+
+          if (saleType == 'Bird') {
+            detail =
+                '$quantity birds · ${weight.toStringAsFixed(2)} kg '
+                '@ $price tk/kg';
+          } else if (saleType == 'Litter') {
+            detail = '$quantity sacks @ $price tk/sack';
+          } else {
+            detail = '$quantity pcs @ $price tk/pc';
+          }
+
+          final buyer = (s['buyer_name'] ?? '').toString();
+
+          if (buyer.isNotEmpty) {
+            detail += ' · $buyer';
+          }
+
+          final tile = ListTile(
+            dense: true,
+            leading: Icon(
+              saleType == 'Bird'
+                  ? Icons.sell
+                  : saleType == 'Litter'
+                      ? Icons.shopping_bag
+                      : Icons.egg,
+              color: colors.brand,
+            ),
+            title: Text(
+              '$saleType · ${amount.toStringAsFixed(2)} tk',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              '${s['sale_date']} · $detail',
+            ),
+            trailing: canEdit
+                ? IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit sale',
+                    onPressed: () => _editSale(s),
+                  )
+                : null,
+          );
+
+          if (!canEdit) return tile;
+
+          return Dismissible(
+            key: ValueKey(s['id']),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              color: colors.error,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 18),
+              child: Icon(
+                Icons.delete,
+                color: colors.card,
+              ),
+            ),
+            confirmDismiss: (_) => _delete(s),
+            child: tile,
+          );
+        }),
+      ],
+    );
+  }
+
+  // --------------------------------------------------
+  // MAIN UI
+  // --------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (batches.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Sales')),
+        body: const Center(
+          child: Text('No batch found. Please add a batch first.'),
         ),
       );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Sales'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadSalesAndStock,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadSalesAndStock,
+        child: ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            // EDIT MODE TOGGLE
+            Card(
+              child: SwitchListTile(
+                value: editMode,
+                title: const Text(
+                  'Entry Edit Mode',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  isClosed
+                      ? 'Closed batch · Read only'
+                      : editMode
+                          ? 'New entry, edit and delete enabled'
+                          : 'Read only · Editing disabled',
+                ),
+                secondary: Icon(
+                  editMode && !isClosed
+                      ? Icons.edit
+                      : Icons.lock_outline,
+                  color: colors.brand,
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    editMode = value;
+
+                    if (!canEdit) {
+                      _clearForm();
+                    }
+                  });
+                },
+              ),
+            ),
+
+            if (isClosed)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.brandSoft,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'This batch is closed. Sales records are read only.',
+                ),
+              ),
+
+            const SizedBox(height: 10),
+
+            if (canEdit) ...[
+              if (editingSaleId != null)
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.brandSoft,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'EDITING EXISTING SALE',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+
+              _saleForm(colors),
+            ] else ...[
+              _stockBanner(colors),
+              const SizedBox(height: 12),
+              const Center(
+                child: Text(
+                  'Read Only Mode',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+
+            _summary(colors),
+
+            const SizedBox(height: 10),
+
+            _recentSales(colors),
+          ],
+        ),
+      ),
+    );
+  }
 }
