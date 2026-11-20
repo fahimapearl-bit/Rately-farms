@@ -25,8 +25,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   final _qty = TextEditingController();
   final _weight = TextEditingController();
   final _price = TextEditingController();
+  final _paid = TextEditingController();
   final _buyer = TextEditingController();
   final _remarks = TextEditingController();
+  final _editReason = TextEditingController();
 
   static const types = [
     'Bird',
@@ -39,9 +41,13 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   List<Map<String, dynamic>> batches = [];
   List<Map<String, dynamic>> sales = [];
 
-  /// Daily egg totals for the selected batch (from daily_records).
+  /// Per-batch aggregates loaded from Supabase.
   int _producedGood = 0;
   int _producedDamaged = 0;
+  int _addedBirds = 0; // Σ bird_additions.quantity
+  int _deadBirds = 0; // Σ daily_records.mortality
+  /// All average-weight samples for the batch, from weekly_weights.
+  List<WeightPoint> _weightPoints = [];
 
   String? batchId;
   String type = 'Bird';
@@ -49,6 +55,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   bool loading = true;
   bool saving = false;
   bool stockLoading = false;
+
+  /// Non-null while a correction (edit) is in progress.
+  /// Edit = reverse the old row + insert a corrected row.
+  Map<String, dynamic>? _reversalTarget;
 
   InputDecoration _dec(String label, {IconData? icon}) => InputDecoration(
         labelText: label,
@@ -65,6 +75,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     _qty.addListener(() => setState(() {}));
     _weight.addListener(() => setState(() {}));
     _price.addListener(() => setState(() {}));
+    _paid.addListener(() => setState(() {}));
     _loadBatches();
   }
 
@@ -73,8 +84,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     _qty.dispose();
     _weight.dispose();
     _price.dispose();
+    _paid.dispose();
     _buyer.dispose();
     _remarks.dispose();
+    _editReason.dispose();
     super.dispose();
   }
 
@@ -113,7 +126,6 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     final p = (batch?['egg_purpose'] ?? '').toString().toLowerCase().trim();
     if (p == 'hatching') return 'hatching';
     if (p == 'table') return 'table';
-    // Fallback for old rows without egg_purpose
     if (isEggBatch) return 'table';
     return null;
   }
@@ -139,32 +151,43 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     if (eggPurpose == 'hatching') {
       return const ['Hatching Eggs', 'Damaged Eggs', 'Litter'];
     }
-    // table (or default)
     return const ['Table Eggs', 'Damaged Eggs', 'Litter'];
   }
 
   // ---------------------------------------------------------------------------
-  // Stock (computed from daily_records + sales)
+  // Live stock (computed from daily_records + bird_additions + sales)
   // ---------------------------------------------------------------------------
 
-  int get soldTable => sales
-      .where((s) => s['sale_type'] == 'Table Eggs')
+  /// Only active (non-reversed) sales count towards stock & revenue.
+  List<Map<String, dynamic>> get activeSales =>
+      sales.where((s) => s['is_reversed'] != true).toList();
+
+  int _sumQty(String saleType) => activeSales
+      .where((s) => s['sale_type'] == saleType)
       .fold(0, (sum, s) => sum + _int(s['quantity']));
 
-  int get soldHatching => sales
-      .where((s) => s['sale_type'] == 'Hatching Eggs')
-      .fold(0, (sum, s) => sum + _int(s['quantity']));
+  int get soldTable => _sumQty('Table Eggs');
+  int get soldHatching => _sumQty('Hatching Eggs');
+  int get soldDamaged => _sumQty('Damaged Eggs');
+  int get soldBirds => _sumQty('Bird');
 
-  int get soldDamaged => sales
-      .where((s) => s['sale_type'] == 'Damaged Eggs')
-      .fold(0, (sum, s) => sum + _int(s['quantity']));
+  /// Birds currently in the flock:
+  /// initial + Σ additions − Σ mortality − Σ birds sold
+  int get flockCount {
+    final initial = _int(batch?['initial_birds']);
+    final c = initial + _addedBirds - _deadBirds - soldBirds;
+    return c.clamp(0, 1 << 30);
+  }
 
-  int get soldBirds => sales
-      .where((s) => s['sale_type'] == 'Bird')
-      .fold(0, (sum, s) => sum + _int(s['quantity']));
+  /// Flock weight for today: exact weekly_weights record, otherwise linear
+  /// interpolation between the nearest earlier and later records; the
+  /// nearest one-sided value when only one side exists; null when the
+  /// batch has no weight data at all. Never stored, so it can't drift.
+  InterpWeight? get _weightToday =>
+      interpolateWeight(_weightPoints, DateTime.now());
 
-  /// Good eggs still in stock for this batch.
-  /// Table batch → table stock; Hatching batch → hatching stock.
+  double get flockWeightKg => (_weightToday?.kg ?? 0) * flockCount;
+
   int get goodEggStock {
     final produced = _producedGood;
     if (eggPurpose == 'hatching') {
@@ -196,10 +219,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     final q = int.tryParse(_qty.text.trim()) ?? 0;
     final w = double.tryParse(_weight.text.trim()) ?? 0.0;
     final p = double.tryParse(_price.text.trim()) ?? 0.0;
-    if (type == 'Bird') {
-      if (w > 0) return w * p;
-      return q * p;
-    }
+    if (type == 'Bird' && w > 0) return w * p;
     return q * p;
   }
 
@@ -212,23 +232,29 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     return q * p;
   }
 
-  double get birdSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Bird')
+  double _sumRevenue(String saleType) => activeSales
+      .where((s) => s['sale_type'] == saleType)
       .fold(0.0, (sum, s) => sum + _calcAmount(s));
 
-  double get eggSalesTotal => sales
+  double get birdSalesTotal => _sumRevenue('Bird');
+
+  double get eggSalesTotal => activeSales
       .where((s) =>
           s['sale_type'] == 'Table Eggs' ||
           s['sale_type'] == 'Hatching Eggs' ||
           s['sale_type'] == 'Damaged Eggs')
       .fold(0.0, (sum, s) => sum + _calcAmount(s));
 
-  double get litterSalesTotal => sales
-      .where((s) => s['sale_type'] == 'Litter')
-      .fold(0.0, (sum, s) => sum + _calcAmount(s));
+  double get litterSalesTotal => _sumRevenue('Litter');
 
   double get totalRevenue =>
-      sales.fold(0.0, (sum, s) => sum + _calcAmount(s));
+      activeSales.fold(0.0, (sum, s) => sum + _calcAmount(s));
+
+  double get totalPaid => activeSales.fold(
+      0.0, (sum, s) => sum + ((s['paid_amount'] ?? 0) as num).toDouble());
+
+  double get totalDue => activeSales.fold(
+      0.0, (sum, s) => sum + ((s['due_amount'] ?? 0) as num).toDouble());
 
   // ---------------------------------------------------------------------------
   // Load
@@ -274,10 +300,11 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
       int good = 0;
       int damaged = 0;
+      int dead = 0;
       try {
         final dailyRows = await client
             .from('daily_records')
-            .select('eggs_good, eggs_damaged, eggs_collected')
+            .select('eggs_good, eggs_damaged, eggs_collected, mortality')
             .eq('batch_id', batchId!);
 
         for (final r in List<Map<String, dynamic>>.from(dailyRows)) {
@@ -289,9 +316,39 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
           }
           good += g;
           damaged += d;
+          dead += _int(r['mortality']);
         }
       } catch (_) {
         // daily_records columns may vary; stock stays 0
+      }
+
+      int added = 0;
+      try {
+        final addRows = await client
+            .from('bird_additions')
+            .select('quantity')
+            .eq('batch_id', batchId!);
+        added = List<Map<String, dynamic>>.from(addRows)
+            .fold(0, (sum, r) => sum + _int(r['quantity']));
+      } catch (_) {
+        // bird_additions may not exist for very old installs
+      }
+
+      List<WeightPoint> wPoints = [];
+      try {
+        final wRows = await client
+            .from('weekly_weights')
+            .select('weight_date, average_weight_kg')
+            .eq('batch_id', batchId!);
+        for (final r in List<Map<String, dynamic>>.from(wRows)) {
+          final d = DateTime.tryParse('${r['weight_date']}');
+          final w = (r['average_weight_kg'] as num?)?.toDouble();
+          if (d != null && w != null && w > 0) {
+            wPoints.add(WeightPoint(d, w));
+          }
+        }
+      } catch (_) {
+        // weekly_weights may be empty; weight card shows —
       }
 
       if (!mounted) return;
@@ -299,6 +356,9 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         sales = List<Map<String, dynamic>>.from(salesRows);
         _producedGood = good;
         _producedDamaged = damaged;
+        _deadBirds = dead;
+        _addedBirds = added;
+        _weightPoints = wPoints;
       });
     } catch (e) {
       _msg('Failed to load sales/stock: $e', error: true);
@@ -314,8 +374,89 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   }
 
   // ---------------------------------------------------------------------------
-  // Save / Delete
+  // Save / Edit (reversal) / Delete
   // ---------------------------------------------------------------------------
+
+  void _fillFormFromSale(Map<String, dynamic> s) {
+    type = s['sale_type'] ?? type;
+    _qty.text = '${_int(s['quantity'])}';
+    final w = (s['weight_kg'] as num?)?.toDouble();
+    _weight.text = w == null ? '' : w.toString();
+    _price.text = '${((s['unit_price'] ?? 0) as num).toDouble()}';
+    _paid.text = '${((s['paid_amount'] ?? 0) as num).toDouble()}';
+    _buyer.text = (s['buyer_name'] ?? '').toString();
+    _remarks.text = (s['remarks'] ?? '').toString();
+    final d = s['sale_date']?.toString();
+    if (d != null && d.length >= 10) {
+      date = DateTime.tryParse(d) ?? date;
+    }
+  }
+
+  void _clearForm() {
+    _qty.clear();
+    _weight.clear();
+    _price.clear();
+    _paid.clear();
+    _buyer.clear();
+    _remarks.clear();
+    _editReason.clear();
+    _reversalTarget = null;
+    date = DateTime.now();
+  }
+
+  /// Starts an edit: asks for a reason, fills the form with the old values.
+  Future<void> _startEdit(Map<String, dynamic> s) async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Edit sale'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'The old record will be marked as reversed (kept for audit) '
+              'and a corrected record will be saved.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _editReason,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Reason (required)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              c,
+              _editReason.text.trim(),
+            ),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (reason == null || reason.isEmpty || !mounted) return;
+    setState(() {
+      _reversalTarget = s;
+      _fillFormFromSale(s);
+      _editReason.clear();
+    });
+    _msg('Correct the values and press Save');
+  }
+
+  void _cancelEdit() {
+    setState(_clearForm);
+    _msg('Edit cancelled');
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || batchId == null) return;
@@ -323,6 +464,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     final q = int.tryParse(_qty.text.trim());
     final p = double.tryParse(_price.text.trim());
     final w = type == 'Bird' ? double.tryParse(_weight.text.trim()) : null;
+    final paid = double.tryParse(_paid.text.trim()) ?? 0;
 
     if (q == null || q <= 0) {
       _msg('Enter valid quantity', error: true);
@@ -337,16 +479,27 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       return;
     }
 
-    // Egg stock validation
+    final total = type == 'Bird' && (w ?? 0) > 0 ? w! * p : q * p;
+    if (paid > total) {
+      _msg('Paid amount cannot exceed total ($total tk)', error: true);
+      return;
+    }
+    final due = total - paid;
+
+    // Egg stock validation — excludes reversed rows and, while editing,
+    // the row being corrected (its quantity is going back to stock).
     if (type == 'Table Eggs' ||
         type == 'Hatching Eggs' ||
         type == 'Damaged Eggs') {
-      final available = availableForCurrentType;
-      if (q > available) {
-        _msg(
-          'Not enough stock. Available: $available pcs',
-          error: true,
-        );
+      final editingQty =
+          _reversalTarget != null ? _int(_reversalTarget!['quantity']) : 0;
+      final editingIsSameType =
+          _reversalTarget != null && _reversalTarget!['sale_type'] == type;
+      final effectiveAvailable =
+          availableForCurrentType + (editingIsSameType ? editingQty : 0);
+      if (q > effectiveAvailable) {
+        _msg('Not enough stock. Available: $effectiveAvailable pcs',
+            error: true);
         return;
       }
       // Purpose mismatch guard
@@ -361,9 +514,25 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       }
     }
 
+    // Bird count validation: cannot sell more birds than are in the flock.
+    if (type == 'Bird') {
+      final editingQty = _reversalTarget != null
+          ? _int(_reversalTarget!['quantity'])
+          : 0;
+      final editingIsSameType =
+          _reversalTarget != null && _reversalTarget!['sale_type'] == 'Bird';
+      final effectiveFlock =
+          flockCount + (editingIsSameType ? editingQty : 0);
+      if (q > effectiveFlock) {
+        _msg('Only $effectiveFlock birds in flock. Cannot sell $q.',
+            error: true);
+        return;
+      }
+    }
+
     setState(() => saving = true);
     try {
-      await client.from('sales').insert({
+      final row = {
         'user_id': client.auth.currentUser!.id,
         'batch_id': batchId,
         'sale_date': date.toIso8601String().split('T').first,
@@ -371,20 +540,45 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         'quantity': q,
         'weight_kg': w,
         'unit_price': p,
+        'paid_amount': paid,
+        'due_amount': due,
         'buyer_name': _buyer.text.trim(),
         'remarks': _remarks.text.trim(),
-      });
+      };
 
-      _qty.clear();
-      _weight.clear();
-      _price.clear();
-      _buyer.clear();
-      _remarks.clear();
+      if (_reversalTarget != null) {
+        // 1) reverse the old row, 2) insert the corrected row.
+        await client.from('sales').update({
+          'is_reversed': true,
+          'edit_reason': _reversalTarget!['edit_reason'] ??
+              'corrected on ${DateTime.now().toIso8601String()}',
+          'edited_at': DateTime.now().toIso8601String(),
+        }).eq('id', _reversalTarget!['id']);
 
-      _msg('Sale saved successfully');
+        await client
+            .from('sales')
+            .insert({...row, 'corrected_from_id': _reversalTarget!['id']});
+
+        _msg('Sale corrected (old record kept as reversed)');
+      } else {
+        await client.from('sales').insert(row);
+        _msg('Sale saved successfully');
+      }
+
+      setState(_clearForm);
       await _loadSalesAndStock();
     } catch (e) {
       _msg('Save failed: $e', error: true);
+      // If the insert after reversal failed, un-reverse the old row so
+      // stock is not silently lost.
+      if (_reversalTarget != null) {
+        try {
+          await client.from('sales').update({
+            'is_reversed': false,
+            'edited_at': null,
+          }).eq('id', _reversalTarget!['id']);
+        } catch (_) {}
+      }
     }
     if (mounted) setState(() => saving = false);
   }
@@ -428,25 +622,46 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   // UI
   // ---------------------------------------------------------------------------
 
-  Widget _stockBanner(AppColors colors) {
+  Widget _stockCard(AppColors colors) {
+    final w = _weightToday;
     if (!isEggBatch) {
-      final initial = _int(batch?['initial_birds']);
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: colors.brandSoft,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: colors.line),
         ),
-        child: Text(
-          'Birds: initial $initial · sold $soldBirds',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: colors.ink,
-          ),
-        ),
+        child: stockLoading
+            ? const LinearProgressIndicator(minHeight: 2)
+            : Row(
+                children: [
+                  Expanded(
+                    child: _stat(
+                      'Birds in flock',
+                      '$flockCount',
+                      'init ${_int(batch?['initial_birds'])} + add $_addedBirds − dead $_deadBirds − sold $soldBirds',
+                      colors,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _stat(
+                      'Flock weight',
+                      w == null
+                          ? '—'
+                          : '${(w.kg * flockCount).toStringAsFixed(1)} kg'
+                              '${w.isEstimated ? ' [est.]' : ''}',
+                      w == null
+                          ? 'no weight records yet'
+                          : '@ ${w.kg.toStringAsFixed(3)} kg/bird'
+                              '${w.isEstimated ? ' [est.]' : ''}',
+                      colors,
+                    ),
+                  ),
+                ],
+              ),
       );
     }
 
@@ -478,26 +693,50 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    'Good in stock: $goodEggStock',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  child: _stat(
+                    'Good in stock',
+                    '$goodEggStock',
+                    'produced $_producedGood − sold ${eggPurpose == 'hatching' ? soldHatching : soldTable}',
+                    colors,
                   ),
                 ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Damaged in stock: $damagedEggStock',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  child: _stat(
+                    'Damaged in stock',
+                    '$damagedEggStock',
+                    'produced $_producedDamaged − sold $soldDamaged',
+                    colors,
                   ),
                 ),
               ],
             ),
-          const SizedBox(height: 4),
-          Text(
-            'Produced good $_producedGood · damaged $_producedDamaged',
-            style: TextStyle(fontSize: 11, color: colors.muted),
-          ),
         ],
       ),
+    );
+  }
+
+  Widget _stat(String label, String value, String sub, AppColors colors) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: colors.muted),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: colors.ink,
+          ),
+        ),
+        Text(
+          sub,
+          style: TextStyle(fontSize: 10, color: colors.muted),
+        ),
+      ],
     );
   }
 
@@ -517,13 +756,18 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     }
 
     final allowed = allowedTypes;
-    // Keep dropdown value valid
     final typeValue = allowed.contains(type) ? type : allowed.first;
+    final editing = _reversalTarget != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sales'),
+        title: Text(editing ? 'Sales — correcting…' : 'Sales'),
         actions: [
+          if (editing)
+            TextButton(
+              onPressed: _cancelEdit,
+              child: const Text('Cancel edit'),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadSalesAndStock,
@@ -555,16 +799,18 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                           ),
                         )
                         .toList(),
-                    onChanged: (v) async {
-                      setState(() {
-                        batchId = v;
-                        _syncTypeToBatch();
-                      });
-                      await _loadSalesAndStock();
-                    },
+                    onChanged: editing
+                        ? null
+                        : (v) async {
+                            setState(() {
+                              batchId = v;
+                              _syncTypeToBatch();
+                            });
+                            await _loadSalesAndStock();
+                          },
                   ),
                   const SizedBox(height: 10),
-                  _stockBanner(colors),
+                  _stockCard(colors),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: typeValue,
@@ -585,8 +831,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                           child: TextFormField(
                             controller: _qty,
                             keyboardType: TextInputType.number,
-                            decoration:
-                                _dec('Birds count', icon: Icons.numbers),
+                            decoration: _dec('Birds count',
+                                icon: Icons.numbers),
                             validator: (v) {
                               final n = int.tryParse((v ?? '').trim());
                               if (n == null || n <= 0) return 'Enter quantity';
@@ -598,10 +844,12 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                         Expanded(
                           child: TextFormField(
                             controller: _weight,
-                            keyboardType: const TextInputType.numberWithOptions(
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            decoration: _dec('Weight (kg)', icon: Icons.scale),
+                            decoration:
+                                _dec('Weight (kg)', icon: Icons.scale),
                             validator: (v) {
                               final n = double.tryParse((v ?? '').trim());
                               if (n == null || n <= 0) return 'Enter weight';
@@ -616,7 +864,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                       controller: _price,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
-                      decoration: _dec('Price (tk/kg)', icon: Icons.payments),
+                      decoration:
+                          _dec('Price (tk/kg)', icon: Icons.payments),
                       validator: (v) {
                         final n = double.tryParse((v ?? '').trim());
                         if (n == null || n <= 0) return 'Enter rate';
@@ -639,9 +888,13 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                             validator: (v) {
                               final n = int.tryParse((v ?? '').trim());
                               if (n == null || n <= 0) return 'Enter eggs';
-                              if (n > availableForCurrentType) {
-                                return 'Max $availableForCurrentType in stock';
-                              }
+                              final editingQty = _reversalTarget != null &&
+                                      _reversalTarget!['sale_type'] == type
+                                  ? _int(_reversalTarget!['quantity'])
+                                  : 0;
+                              final avail =
+                                  availableForCurrentType + editingQty;
+                              if (n > avail) return 'Max $avail in stock';
                               return null;
                             },
                           ),
@@ -736,23 +989,57 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: colors.brandSoft),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        Text(
-                          'Estimated Total:',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: colors.brand,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total:',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: colors.brand,
+                              ),
+                            ),
+                            Text(
+                              '${currentTotal.toStringAsFixed(2)} tk',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: colors.brand,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '${currentTotal.toStringAsFixed(2)} tk',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: colors.brand,
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _paid,
+                          keyboardType:
+                              const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: _dec('Paid amount (tk)',
+                              icon: Icons.request_quote),
+                          validator: (v) {
+                            final n = double.tryParse((v ?? '').trim());
+                            if (n == null || n < 0) return 'Enter paid amount';
+                            if (n > currentTotal) {
+                              return 'Cannot exceed total';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            'Due: ${(currentTotal - (double.tryParse(_paid.text.trim()) ?? 0)).toStringAsFixed(2)} tk',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colors.error,
+                            ),
                           ),
                         ),
                       ],
@@ -774,7 +1061,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                       Expanded(
                         child: TextFormField(
                           controller: _remarks,
-                          decoration: _dec('Remarks', icon: Icons.comment),
+                          decoration:
+                              _dec('Remarks', icon: Icons.comment),
                         ),
                       ),
                     ],
@@ -816,8 +1104,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                                 color: colors.card,
                               ),
                             )
-                          : const Icon(Icons.save),
-                      label: const Text('Save Sale'),
+                          : Icon(editing ? Icons.fact_check : Icons.save),
+                      label: Text(editing ? 'Save Correction' : 'Save Sale'),
                     ),
                   ),
                 ],
@@ -835,13 +1123,15 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                     _row('Litter sales', litterSalesTotal),
                     const Divider(),
                     _row('Total revenue', totalRevenue, bold: true),
+                    _row('Total paid', totalPaid),
+                    _row('Total due', totalDue),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Recent sales (swipe left to delete)',
+              'All sales — tap ✎ to edit (kept as reversal), swipe left to delete',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             if (sales.isEmpty)
@@ -854,6 +1144,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
               final t = s['sale_type'] ?? '';
               final dateStr = s['sale_date'] ?? '';
               final buyer = (s['buyer_name'] ?? '').toString();
+              final reversed = s['is_reversed'] == true;
               String detail = '';
               if (t == 'Bird') {
                 final q = s['quantity'] ?? 0;
@@ -863,45 +1154,63 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
               } else if (t == 'Table Eggs' ||
                   t == 'Hatching Eggs' ||
                   t == 'Damaged Eggs') {
-                final q = s['quantity'] ?? 0;
-                final p = s['unit_price'] ?? 0;
-                detail = '$q pcs @ $p tk/pc';
+                detail =
+                    '${s['quantity']} pcs @ ${s['unit_price']} tk/pc';
               } else {
-                final q = s['quantity'] ?? 0;
-                final p = s['unit_price'] ?? 0;
-                detail = '$q sacks @ $p tk/sack';
+                detail =
+                    '${s['quantity']} sacks @ ${s['unit_price']} tk/sack';
               }
               if (buyer.isNotEmpty) detail += ' • $buyer';
+              final paid = ((s['paid_amount'] ?? 0) as num).toDouble();
+              final due = ((s['due_amount'] ?? 0) as num).toDouble();
+              if (due > 0) detail += ' • due ${due.toStringAsFixed(0)} tk';
 
-              return Dismissible(
-                key: ValueKey(s['id']),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: colors.error,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 16),
-                  child: Icon(Icons.delete, color: colors.card),
-                ),
-                confirmDismiss: (_) => _delete(s),
-                child: ListTile(
-                  dense: true,
-                  leading: Icon(
-                    t == 'Bird'
-                        ? Icons.sell
-                        : t == 'Litter'
-                            ? Icons.shopping_bag
-                            : Icons.egg,
-                    color: t == 'Bird'
-                        ? colors.brand
-                        : t == 'Litter'
-                            ? colors.warning
-                            : colors.warning,
+              return Opacity(
+                opacity: reversed ? 0.45 : 1.0,
+                child: Dismissible(
+                  key: ValueKey(s['id']),
+                  direction: reversed
+                      ? DismissDirection.none
+                      : DismissDirection.endToStart,
+                  background: Container(
+                    color: colors.error,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Icon(Icons.delete, color: colors.card),
                   ),
-                  title: Text(
-                    '$t  •  ${amt.toStringAsFixed(2)} tk',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  confirmDismiss: (_) => _delete(s),
+                  child: ListTile(
+                    dense: true,
+                    leading: Icon(
+                      t == 'Bird'
+                          ? Icons.sell
+                          : t == 'Litter'
+                              ? Icons.shopping_bag
+                              : Icons.egg,
+                      color: reversed
+                          ? colors.muted
+                          : t == 'Bird'
+                              ? colors.brand
+                              : colors.warning,
+                    ),
+                    title: Text(
+                      reversed
+                          ? '$t • REVERSED (corrected)'
+                          : '$t  •  ${amt.toStringAsFixed(2)} tk',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      '$dateStr  |  $detail\npaid ${paid.toStringAsFixed(0)} / due ${due.toStringAsFixed(0)} tk',
+                    ),
+                    isThreeLine: true,
+                    trailing: reversed
+                        ? const Icon(Icons.undo, size: 18)
+                        : IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            tooltip: 'Edit (reversal + correction)',
+                            onPressed: saving ? null : () => _startEdit(s),
+                          ),
                   ),
-                  subtitle: Text('$dateStr  |  $detail'),
                 ),
               );
             }),
@@ -925,4 +1234,59 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
           ],
         ),
       );
+}
+
+/// One (date, kg) sample from weekly_weights.
+class WeightPoint {
+  final DateTime date;
+  final double kg;
+  const WeightPoint(this.date, this.kg);
+}
+
+/// Result of a weight lookup: the value plus whether it was estimated.
+class InterpWeight {
+  final double kg;
+  final bool isEstimated;
+  const InterpWeight(this.kg, this.isEstimated);
+}
+
+DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+/// Linear interpolation of the batch's average weight on [day].
+///
+/// - Exact record on that date -> (record value, isEstimated: false).
+/// - Between two records       -> linear interpolation, isEstimated: true.
+/// - Only one side exists      -> nearest value, no extrapolation, est.
+/// - No records at all         -> null.
+InterpWeight? interpolateWeight(List<WeightPoint> points, DateTime day) {
+  if (points.isEmpty) return null;
+  final target = _dayOnly(day);
+  final sorted = [...points]..sort((a, b) => a.date.compareTo(b.date));
+
+  WeightPoint? before;
+  WeightPoint? after;
+  for (final p in sorted) {
+    final d = _dayOnly(p.date);
+    if (d.isBefore(target)) {
+      before = p;
+    } else if (d.isAfter(target)) {
+      after = p;
+      break;
+    } else {
+      return InterpWeight(p.kg, false); // exact match
+    }
+  }
+
+  if (before != null && after != null) {
+    final d1 = _dayOnly(before.date);
+    final d2 = _dayOnly(after.date);
+    final span = d2.difference(d1).inDays;
+    if (span <= 0) return InterpWeight(before.kg, true);
+    final elapsed = target.difference(d1).inDays;
+    final kg = before.kg + (after.kg - before.kg) * elapsed / span;
+    return InterpWeight(kg, true);
+  }
+
+  // One-sided: use the nearest record, never extrapolate.
+  return InterpWeight((before ?? after)!.kg, true);
 }
