@@ -56,6 +56,12 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   bool saving = false;
   bool stockLoading = false;
 
+  /// Guards against out-of-order loads when the batch is switched quickly.
+  int _loadSeq = 0;
+
+  /// Reason typed in the edit dialog; saved to sales.edit_reason.
+  String? _pendingEditReason;
+
   /// Non-null while a correction (edit) is in progress.
   /// Edit = reverse the old row + insert a corrected row.
   Map<String, dynamic>? _reversalTarget;
@@ -149,9 +155,9 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       return const ['Bird', 'Litter'];
     }
     if (eggPurpose == 'hatching') {
-      return const ['Hatching Eggs', 'Damaged Eggs', 'Litter'];
+      return const ['Hatching Eggs', 'Damaged Eggs', 'Bird', 'Litter'];
     }
-    return const ['Table Eggs', 'Damaged Eggs', 'Litter'];
+    return const ['Table Eggs', 'Damaged Eggs', 'Bird', 'Litter'];
   }
 
   // ---------------------------------------------------------------------------
@@ -262,7 +268,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
   Future<void> _loadBatches() async {
     final user = client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
     try {
       final rows = await client
           .from('batches')
@@ -290,6 +299,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
   Future<void> _loadSalesAndStock() async {
     if (batchId == null) return;
+    final seq = ++_loadSeq;
     setState(() => stockLoading = true);
     try {
       final salesRows = await client
@@ -304,7 +314,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       try {
         final dailyRows = await client
             .from('daily_records')
-            .select('eggs_good, eggs_damaged, eggs_collected, mortality')
+            .select() // all columns: a missing column must not zero the mortality
             .eq('batch_id', batchId!);
 
         for (final r in List<Map<String, dynamic>>.from(dailyRows)) {
@@ -318,8 +328,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
           damaged += d;
           dead += _int(r['mortality']);
         }
-      } catch (_) {
-        // daily_records columns may vary; stock stays 0
+      } catch (e) {
+        _msg('Daily records load failed: $e', error: true);
       }
 
       int added = 0;
@@ -351,7 +361,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         // weekly_weights may be empty; weight card shows —
       }
 
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
         sales = List<Map<String, dynamic>>.from(salesRows);
         _producedGood = good;
@@ -363,7 +373,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     } catch (e) {
       _msg('Failed to load sales/stock: $e', error: true);
     }
-    if (mounted) setState(() => stockLoading = false);
+    if (mounted && seq == _loadSeq) setState(() => stockLoading = false);
   }
 
   void _syncTypeToBatch() {
@@ -401,6 +411,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     _remarks.clear();
     _editReason.clear();
     _reversalTarget = null;
+    _pendingEditReason = null;
     date = DateTime.now();
   }
 
@@ -447,6 +458,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
     if (reason == null || reason.isEmpty || !mounted) return;
     setState(() {
       _reversalTarget = s;
+      _pendingEditReason = reason;
       _fillFormFromSale(s);
       _editReason.clear();
     });
@@ -550,7 +562,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         // 1) reverse the old row, 2) insert the corrected row.
         await client.from('sales').update({
           'is_reversed': true,
-          'edit_reason': _reversalTarget!['edit_reason'] ??
+          'edit_reason': _pendingEditReason ??
               'corrected on ${DateTime.now().toIso8601String()}',
           'edited_at': DateTime.now().toIso8601String(),
         }).eq('id', _reversalTarget!['id']);
@@ -575,6 +587,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         try {
           await client.from('sales').update({
             'is_reversed': false,
+            'edit_reason': null,
             'edited_at': null,
           }).eq('id', _reversalTarget!['id']);
         } catch (_) {}
@@ -590,7 +603,8 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       builder: (c) => AlertDialog(
         title: const Text('Delete sale record?'),
         content: Text(
-          '${s['sale_type']} • ${_calcAmount(s).toStringAsFixed(2)} tk',
+          '${s['sale_type']} • ${_calcAmount(s).toStringAsFixed(2)} tk'
+          '${s['corrected_from_id'] != null ? '\n\nThis is a correction. Deleting it will restore the original record.' : ''}',
         ),
         actions: [
           TextButton(
@@ -609,7 +623,17 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
 
     try {
       await client.from('sales').delete().eq('id', s['id']);
-      _msg('Record deleted');
+      final origId = s['corrected_from_id'];
+      if (origId != null) {
+        await client.from('sales').update({
+          'is_reversed': false,
+          'edit_reason': null,
+          'edited_at': null,
+        }).eq('id', origId);
+      }
+      _msg(origId != null
+          ? 'Record deleted; original record restored'
+          : 'Record deleted');
       await _loadSalesAndStock();
       return true;
     } catch (e) {
@@ -622,8 +646,37 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
   // UI
   // ---------------------------------------------------------------------------
 
-  Widget _stockCard(AppColors colors) {
+  /// Birds in flock + Birds stock (avg weight x bird count). Shown for
+  /// every batch type, including egg batches.
+  Widget _flockRow(AppColors colors) {
     final w = _weightToday;
+    final est = (w?.isEstimated ?? false) ? ' [est.]' : '';
+    return Row(
+      children: [
+        Expanded(
+          child: _stat(
+            'Birds in flock',
+            '$flockCount',
+            'init ${_int(batch?['initial_birds'])} + add $_addedBirds − dead $_deadBirds − sold $soldBirds',
+            colors,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _stat(
+            'Birds stock',
+            w == null ? '—' : '${(w.kg * flockCount).toStringAsFixed(1)} kg$est',
+            w == null
+                ? 'no weight records yet'
+                : '${w.kg.toStringAsFixed(3)} kg/bird × $flockCount$est',
+            colors,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _stockCard(AppColors colors) {
     if (!isEggBatch) {
       return Container(
         width: double.infinity,
@@ -635,33 +688,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
         ),
         child: stockLoading
             ? const LinearProgressIndicator(minHeight: 2)
-            : Row(
-                children: [
-                  Expanded(
-                    child: _stat(
-                      'Birds in flock',
-                      '$flockCount',
-                      'init ${_int(batch?['initial_birds'])} + add $_addedBirds − dead $_deadBirds − sold $soldBirds',
-                      colors,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _stat(
-                      'Flock weight',
-                      w == null
-                          ? '—'
-                          : '${(w.kg * flockCount).toStringAsFixed(1)} kg'
-                              '${w.isEstimated ? ' [est.]' : ''}',
-                      w == null
-                          ? 'no weight records yet'
-                          : '@ ${w.kg.toStringAsFixed(3)} kg/bird'
-                              '${w.isEstimated ? ' [est.]' : ''}',
-                      colors,
-                    ),
-                  ),
-                ],
-              ),
+            : _flockRow(colors),
       );
     }
 
@@ -678,18 +705,29 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Egg stock ($purposeLabel)',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: colors.brand,
-            ),
-          ),
-          const SizedBox(height: 6),
           if (stockLoading)
             const LinearProgressIndicator(minHeight: 2)
-          else
+          else ...[
+            Text(
+              'Birds',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: colors.brand,
+              ),
+            ),
+            const SizedBox(height: 6),
+            _flockRow(colors),
+            const Divider(height: 18),
+            Text(
+              'Egg stock ($purposeLabel)',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: colors.brand,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Expanded(
@@ -711,6 +749,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                 ),
               ],
             ),
+          ],
         ],
       ),
     );
@@ -804,6 +843,13 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                         : (v) async {
                             setState(() {
                               batchId = v;
+                              sales = [];
+                              _producedGood = 0;
+                              _producedDamaged = 0;
+                              _addedBirds = 0;
+                              _deadBirds = 0;
+                              _weightPoints = [];
+                              _clearForm();
                               _syncTypeToBatch();
                             });
                             await _loadSalesAndStock();
@@ -1022,8 +1068,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                           decoration: _dec('Paid amount (tk)',
                               icon: Icons.request_quote),
                           validator: (v) {
-                            final n = double.tryParse((v ?? '').trim());
-                            if (n == null || n < 0) return 'Enter paid amount';
+                            final txt = (v ?? '').trim();
+                            if (txt.isEmpty) return null; // empty = 0
+                            final n = double.tryParse(txt);
+                            if (n == null || n < 0) return 'Enter valid amount';
                             if (n > currentTotal) {
                               return 'Cannot exceed total';
                             }
