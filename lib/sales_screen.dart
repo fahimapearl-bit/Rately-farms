@@ -1304,9 +1304,17 @@ DateTime _dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 ///
 /// - Exact record on that date -> (record value, isEstimated: false).
 /// - Between two records       -> linear interpolation, isEstimated: true.
-/// - Only one side exists      -> nearest value, no extrapolation, est.
+/// - After the last record     -> limited extrapolation: the growth rate of
+///   the last two records is carried forward for at most [maxExtrapolateDays]
+///   days (isEstimated: true). Beyond that, or if the rate is not positive
+///   (weight flat/falling), the last recorded value is used unchanged.
+/// - Before the first record   -> nearest (first) value, est.
 /// - No records at all         -> null.
-InterpWeight? interpolateWeight(List<WeightPoint> points, DateTime day) {
+InterpWeight? interpolateWeight(
+  List<WeightPoint> points,
+  DateTime day, {
+  int maxExtrapolateDays = 7,
+}) {
   if (points.isEmpty) return null;
   final target = _dayOnly(day);
   final sorted = [...points]..sort((a, b) => a.date.compareTo(b.date));
@@ -1335,6 +1343,20 @@ InterpWeight? interpolateWeight(List<WeightPoint> points, DateTime day) {
     return InterpWeight(kg, true);
   }
 
-  // One-sided: use the nearest record, never extrapolate.
+  // After the last record: short, rate-based extrapolation.
+  if (before != null && after == null && sorted.length >= 2) {
+    final dLast = _dayOnly(before.date);
+    final daysAhead = target.difference(dLast).inDays;
+    if (daysAhead > 0 && daysAhead <= maxExtrapolateDays) {
+      final prev = sorted[sorted.length - 2];
+      final span = dLast.difference(_dayOnly(prev.date)).inDays;
+      final rate = span > 0 ? (before.kg - prev.kg) / span : 0.0; // kg/day
+      if (rate > 0) {
+        return InterpWeight(before.kg + rate * daysAhead, true);
+      }
+    }
+  }
+
+  // Otherwise: nearest record, no further extrapolation.
   return InterpWeight((before ?? after)!.kg, true);
 }

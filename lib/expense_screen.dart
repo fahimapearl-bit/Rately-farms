@@ -9,6 +9,7 @@ import 'add_batch_screen.dart';
 import 'app_colors.dart';
 import 'average_weight_screen.dart';
 import 'daily_record_screen.dart';
+import 'sales_screen.dart' show WeightPoint, InterpWeight, interpolateWeight;
 
 class ExpenseScreenNew extends StatefulWidget {
   const ExpenseScreenNew({super.key});
@@ -53,6 +54,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   List<Map<String, dynamic>> _sales = [];
   List<Map<String, dynamic>> _adjustments = [];
   List<Map<String, dynamic>> _weights = [];
+  List<Map<String, dynamic>> _birdAdditions = [];
+  bool _additionsLoaded = false;
   String? _selectedActiveBatchId;
   String? _selectedClosedBatchId;
 
@@ -108,6 +111,18 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         _client.from('expenses').select('*').eq('user_id', user.id).order('expense_date', ascending: false),
         _client.from('weekly_weights').select('*').eq('user_id', user.id).order('weight_date', ascending: false),
       ]);
+      List<Map<String, dynamic>> additions = [];
+      var additionsLoaded = false;
+      try {
+        final rows = await _client
+            .from('bird_additions')
+            .select('batch_id, quantity')
+            .eq('user_id', user.id);
+        additions = List<Map<String, dynamic>>.from(rows as List);
+        additionsLoaded = true;
+      } catch (_) {
+        // table missing on very old installs: fall back to batches.additional_birds
+      }
       if (!mounted) return;
       final batches = List<Map<String, dynamic>>.from(results[0] as List);
       final active = batches.where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() != 'closed').toList();
@@ -116,7 +131,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       setState(() {
         _batches = batches;
         _records = List<Map<String, dynamic>>.from(results[1] as List);
-        _sales = List<Map<String, dynamic>>.from(results[2] as List);
+        // Edited sales keep their old row with is_reversed = true: skip those.
+        _sales = List<Map<String, dynamic>>.from(results[2] as List)
+            .where((s) => s['is_reversed'] != true)
+            .toList();
+        _birdAdditions = additions;
+        _additionsLoaded = additionsLoaded;
         _adjustments = List<Map<String, dynamic>>.from(results[3] as List);
         _weights = List<Map<String, dynamic>>.from(results[4] as List);
 
@@ -159,6 +179,76 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final price = _n(s['unit_price']);
     return type == 'Bird' && weight > 0 ? weight * price : quantity * price;
   }
+
+  // ------------------------------------------------------------------ batch ---
+  // A mid-cycle batch is onboarded with `initial_birds` = birds ALIVE TODAY
+  // and `opening_cost` = everything already spent before onboarding. Its chick
+  // purchase never happened inside the app, so birds-alive x chick_price
+  // invents a purchase while dropping opening_cost hides the real one.
+
+  /// Birds added later: Σ bird_additions.quantity (same source as the sales
+  /// screen). Falls back to the old batches.additional_birds column only if
+  /// the table could not be read.
+  int _additionalBirds(Map<String, dynamic> b) {
+    if (!_additionsLoaded) return _i(b['additional_birds']);
+    final id = '${b['id']}';
+    return _birdAdditions
+        .where((r) => '${r['batch_id']}' == id)
+        .fold<int>(0, (sum, r) => sum + _i(r['quantity']));
+  }
+
+  bool _isGoodEggSale(Map<String, dynamic> s) {
+    final t = '${s['sale_type']}';
+    return t.contains('Egg') && !t.contains('Damaged');
+  }
+
+  int _startAgeDays(Map<String, dynamic> b) => _i(b['start_age_days']);
+
+  double _openingCost(Map<String, dynamic> b) => _n(b['opening_cost']);
+
+  bool _isMidCycle(Map<String, dynamic> b) =>
+      _startAgeDays(b) > 0 || _openingCost(b) > 0;
+
+  /// Chicks actually bought through the app (0 for a mid-cycle batch).
+  double _chickCost(Map<String, dynamic> b) {
+    if (_isMidCycle(b)) return 0;
+    return _i(b['initial_birds']) * _n(b['chick_price']);
+  }
+
+  /// Birds ever owned by the batch: bought + added later (add1, add2, ...).
+  int _totalBirds(Map<String, dynamic> b) =>
+      _i(b['initial_birds']) + _additionalBirds(b);
+
+  /// Average weight as of [asOf], computed with the same interpolateWeight()
+  /// the sales screen uses. Weekly weights are the source; daily_records
+  /// avg_weight_kg is only a fallback when there is no weekly weight.
+  InterpWeight? _weightAt(
+    List<Map<String, dynamic>> weekly,
+    List<Map<String, dynamic>> records, [
+    DateTime? asOf,
+  ]) {
+    List<WeightPoint> points(
+      List<Map<String, dynamic>> rows,
+      String dateKey,
+      String kgKey,
+    ) {
+      final out = <WeightPoint>[];
+      for (final r in rows) {
+        final d = _date(r[dateKey]);
+        final w = _n(r[kgKey]);
+        if (d != null && w > 0) out.add(WeightPoint(d, w));
+      }
+      return out;
+    }
+
+    var pts = points(weekly, 'weight_date', 'average_weight_kg');
+    if (pts.isEmpty) pts = points(records, 'record_date', 'avg_weight_kg');
+    return interpolateWeight(pts, asOf ?? DateTime.now());
+  }
+
+  String _titleCase(String value) => value.isEmpty
+      ? value
+      : '${value[0].toUpperCase()}${value.substring(1).toLowerCase()}';
 
   List<_SeriesPoint> _series(
     List<Map<String, dynamic>> records,
@@ -217,7 +307,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final today = DateTime.now();
     final a = DateTime(start.year, start.month, start.day);
     final z = DateTime(today.year, today.month, today.day);
-    return math.max(0, z.difference(a).inDays + 1);
+    return math.max(0, z.difference(a).inDays + 1 + _startAgeDays(b));
   }
 
   String _batchLabel(Map<String, dynamic> b) =>
@@ -371,12 +461,13 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final weights = _forBatch(batchId, _weights)
       ..sort((a, b) => '${b['weight_date']}'.compareTo('${a['weight_date']}'));
 
-    final initialBirds = _i(batch['initial_birds']);
-    final chickPrice = _n(batch['chick_price']);
-    final initialCost = initialBirds * chickPrice;
+    final initialBirds = _totalBirds(batch);
+    final openingCost = _openingCost(batch);
+    final chickCost = _chickCost(batch);
     final dailyCost = records.fold<double>(0, (sum, r) => sum + _recordCost(r));
     final adjustmentCost = adjustments.fold<double>(0, (sum, e) => sum + _n(e['amount']));
-    final totalRunningCost = initialCost + dailyCost + adjustmentCost;
+    final totalRunningCost =
+        chickCost + openingCost + dailyCost + adjustmentCost;
 
     final mortality = records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
     final birdsSold = sales.where((s) => s['sale_type'] == 'Bird').fold<int>(0, (sum, s) => sum + _i(s['quantity']));
@@ -385,9 +476,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         ? totalRunningCost / remainingLiveBirds
         : (initialBirds > 0 ? totalRunningCost / initialBirds : 0.0);
 
-    final latestWeight = weights.isNotEmpty
-        ? _n(weights.first['average_weight_kg'])
-        : (records.isNotEmpty ? _n(records.first['avg_weight_kg']) : 0.0);
+    final wNow = _weightAt(weights, records);
+    final latestWeight = wNow?.kg ?? 0.0;
+    final weightEstimated = wNow?.isEstimated ?? false;
     final totalLiveWeightKg = remainingLiveBirds * latestWeight;
     final costPerKg = totalLiveWeightKg > 0 ? totalRunningCost / totalLiveWeightKg : 0.0;
     final marketPrice = records.isNotEmpty ? _n(records.first['market_price_per_kg']) : 0.0;
@@ -395,7 +486,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
     final isLayer = _batchType(batch) == 'Layer';
     final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
-    final eggsSold = sales.where((s) => '${s['sale_type']}'.contains('Egg')).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final currentEggStock = math.max(0, eggsCollected - eggsSold).toInt();
     final eggPrice = records.isNotEmpty ? _n(records.first['egg_price_per_piece']) : 0.0;
     final eggValuation = currentEggStock * eggPrice;
@@ -424,7 +515,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           colors: colors,
           batch: batch,
           totalCost: totalRunningCost,
-          initialCost: initialCost,
+          chickCost: chickCost,
+          openingCost: openingCost,
           dailyCost: dailyCost,
           adjustmentCost: adjustmentCost,
           remainingLiveBirds: remainingLiveBirds,
@@ -432,6 +524,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           mortality: mortality,
           costPerLiveBird: costPerLiveBird,
           latestWeight: latestWeight,
+          weightEstimated: weightEstimated,
           costPerKg: costPerKg,
           estimatedValuation: isLayer ? estimatedLiveValuation + eggValuation : estimatedLiveValuation,
           marketPrice: marketPrice,
@@ -445,7 +538,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         // Cost Breakdown (Donut Chart & Details)
         _sectionTitle('Cost Breakdown', Icons.pie_chart_outline, colors.warning),
         const SizedBox(height: 8),
-        _costSummary(colors, initialCost, dailyCost, adjustmentCost, totalRunningCost, records),
+        _costSummary(colors, chickCost, openingCost, dailyCost, totalRunningCost, records, adjustments),
         const SizedBox(height: 18),
 
         // Time Series (Feed & Daily Cost)
@@ -453,11 +546,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         const SizedBox(height: 18),
 
         // Production Analysis (Broiler FCR or Layer Eggs)
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records, batchId),
+        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records,
+            batchId, _n(batch['opening_feed_kg'])),
 
         if (partialRevenue > 0) ...[
           const SizedBox(height: 18),
-          _sectionTitle('Partial Sales Received', Icons.payments_outlined, colors.brand),
+          _sectionTitle('Sales So Far', Icons.payments_outlined, colors.brand),
           const SizedBox(height: 8),
           _partialSalesCard(colors, partialRevenue, birdsSold),
         ],
@@ -497,12 +591,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final weights = _forBatch(batchId, _weights)
       ..sort((a, b) => '${b['weight_date']}'.compareTo('${a['weight_date']}'));
 
-    final initialBirds = _i(batch['initial_birds']);
-    final chickPrice = _n(batch['chick_price']);
-    final initialCost = initialBirds * chickPrice;
+    final initialBirds = _totalBirds(batch);
+    final openingCost = _openingCost(batch);
+    final chickCost = _chickCost(batch);
     final dailyCost = records.fold<double>(0, (sum, r) => sum + _recordCost(r));
     final adjustmentCost = adjustments.fold<double>(0, (sum, e) => sum + _n(e['amount']));
-    final totalCost = initialCost + dailyCost + adjustmentCost;
+    final totalCost = chickCost + openingCost + dailyCost + adjustmentCost;
 
     final totalRevenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
     final birdRevenue = sales.where((s) => s['sale_type'] == 'Bird').fold<double>(0, (sum, s) => sum + _saleAmount(s));
@@ -511,10 +605,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final birdsSold = sales.where((s) => s['sale_type'] == 'Bird').fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final soldWeight = sales.where((s) => s['sale_type'] == 'Bird').fold<double>(0, (sum, s) => sum + _n(s['weight_kg']));
     final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
-    final eggsSold = sales.where((s) => '${s['sale_type']}'.contains('Egg')).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final mortality = records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
     final remainingBirds = math.max(0, initialBirds - mortality - birdsSold).toInt();
-    final latestWeight = weights.isEmpty ? 0.0 : _n(weights.first['average_weight_kg']);
+    final wNow = _weightAt(weights, records);
+    final latestWeight = wNow?.kg ?? 0.0;
     final marketPrice = records.isEmpty ? 0.0 : _n(records.first['market_price_per_kg']);
     final liveValue = remainingBirds * latestWeight * marketPrice;
     final currentEggStock = math.max(0, eggsCollected - eggsSold).toInt();
@@ -558,7 +653,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
         _sectionTitle('Final Cost Summary', Icons.receipt_long_outlined, colors.warning),
         const SizedBox(height: 8),
-        _costSummary(colors, initialCost, dailyCost, adjustmentCost, totalCost, records),
+        _costSummary(colors, chickCost, openingCost, dailyCost, totalCost, records, adjustments),
         const SizedBox(height: 18),
 
         _sectionTitle('Revenue Summary', Icons.point_of_sale_outlined, colors.brand),
@@ -585,7 +680,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         _timeSeriesSection(colors, feedSeries, dailyCostSeries, null),
         const SizedBox(height: 18),
 
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records, null),
+        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records,
+            null, _n(batch['opening_feed_kg'])),
         const SizedBox(height: 18),
 
         _sectionTitle('All Closed Batches History', Icons.history, colors.info),
@@ -604,7 +700,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     required AppColors colors,
     required Map<String, dynamic> batch,
     required double totalCost,
-    required double initialCost,
+    required double chickCost,
+    required double openingCost,
     required double dailyCost,
     required double adjustmentCost,
     required int remainingLiveBirds,
@@ -612,6 +709,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     required int mortality,
     required double costPerLiveBird,
     required double latestWeight,
+    bool weightEstimated = false,
     required double costPerKg,
     required double estimatedValuation,
     required double marketPrice,
@@ -719,6 +817,14 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           color: colors.ink,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Opening ৳${_money.format(openingCost)} · '
+                        'Chicks ৳${_money.format(chickCost)} · '
+                        'Daily ৳${_money.format(dailyCost)} · '
+                        'Other ৳${_money.format(adjustmentCost)}',
+                        style: TextStyle(fontSize: 10, color: colors.muted),
+                      ),
                     ],
                   ),
                   Icon(Icons.trending_up, color: colors.warning, size: 28),
@@ -756,7 +862,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   child: _activeMetricPill(
                     title: 'Cost per kg',
                     value: latestWeight > 0 ? '৳${_money.format(costPerKg)}' : '—',
-                    subtitle: latestWeight > 0 ? 'Weight ${_money.format(latestWeight)}kg' : 'Enter weight ➔',
+                    subtitle: latestWeight > 0 ? 'Weight ${_money.format(latestWeight)}kg${weightEstimated ? ' (est.)' : ''}' : 'Enter weight ➔',
                     color: colors.accent,
                     icon: Icons.scale,
                     onTap: () => _navigateToWeight(batchId),
@@ -1131,7 +1237,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Received Revenue',
+                    'Total Sales (billed)',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colors.brand),
                   ),
                   Text(
@@ -1195,7 +1301,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               final id = '${b['id']}';
               final records = _records.where((r) => '${r['batch_id']}' == id);
               final sales = _sales.where((s) => '${s['batch_id']}' == id);
-              final cost = _i(b['initial_birds']) * _n(b['chick_price']) +
+              final cost = _chickCost(b) +
+                  _openingCost(b) +
                   records.fold<double>(0, (sum, r) => sum + _recordCost(r)) +
                   _adjustments.where((e) => '${e['batch_id']}' == id).fold<double>(0, (sum, e) => sum + _n(e['amount']));
               final revenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
@@ -1281,8 +1388,26 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ],
       );
-  Widget _costSummary(AppColors colors, double initial, double daily, double adjustment, double total, List<Map<String, dynamic>> records) {
-    final categories = <String, double>{'Initial Birds': initial, 'Feed': 0, 'Medicine': 0, 'Vaccine': 0, 'Labour': 0, 'Electricity': 0, 'Transport': 0, 'Other': 0};
+  Widget _costSummary(
+    AppColors colors,
+    double chickCost,
+    double opening,
+    double daily,
+    double total,
+    List<Map<String, dynamic>> records,
+    List<Map<String, dynamic>> expenses,
+  ) {
+    final categories = <String, double>{
+      'Opening balance': opening,
+      'Chick purchase': chickCost,
+      'Feed': 0,
+      'Medicine': 0,
+      'Vaccine': 0,
+      'Labour': 0,
+      'Electricity': 0,
+      'Transport': 0,
+      'Other': 0,
+    };
     for (final r in records) {
       categories['Feed'] = categories['Feed']! + _n(r['feed_cost']);
       categories['Medicine'] = categories['Medicine']! + _n(r['medicine_cost']);
@@ -1292,18 +1417,82 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       categories['Transport'] = categories['Transport']! + _n(r['transport_cost']);
       categories['Other'] = categories['Other']! + _n(r['others_cost']);
     }
-    categories['Other'] = categories['Other']! + adjustment;
-    final visible = categories.entries.where((e) => e.value > 0).toList();
-    return Card(elevation: 0, child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
-      _bigMetric('Total Batch Cost', '৳${_money.format(total)}', colors.warning),
-      const SizedBox(height: 12),
-      Row(children: [Expanded(child: _miniMetric('Initial Birds', initial, colors.purple)), const SizedBox(width: 8), Expanded(child: _miniMetric('Daily Records', daily, colors.warning))]),
-      if (adjustment > 0) ...[const SizedBox(height: 8), _metricRow('Batch adjustments', adjustment, colors)],
-      const SizedBox(height: 14),
-      SizedBox(height: 180, child: Row(children: [Expanded(child: _DonutChart(values: visible.map((e) => e.value).toList(), colors: [colors.purple, colors.brand, colors.error, colors.warning, colors.info, colors.accent, colors.muted, colors.inkAlt])), const SizedBox(width: 10), Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: visible.take(6).map((e) => _legend(e.key, e.value, colors, visible.indexOf(e))).toList()))])),
-      const Divider(height: 20),
-      ...visible.map((e) => _metricRow(e.key, e.value, colors)),
-    ])));
+    // Manual expense rows keep their stored `expense_type` instead of every
+    // one of them landing in "Other" (that column was never read before).
+    for (final e in expenses) {
+      final raw = '${e['expense_type'] ?? ''}'.trim();
+      final key = raw.isEmpty ? 'Other' : _titleCase(raw);
+      categories[key] = (categories[key] ?? 0) + _n(e['amount']);
+    }
+    final visible = categories.entries.where((e) => e.value > 0).toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    // Chart slices and legend must match: fold the tail into one slice.
+    final head = visible.take(6).toList();
+    final tail = visible.skip(6).toList();
+    if (tail.isNotEmpty) {
+      head.add(MapEntry(
+        'Other (${tail.length} more)',
+        tail.fold<double>(0, (sum, e) => sum + e.value),
+      ));
+    }
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            _bigMetric('Total Batch Cost', '৳${_money.format(total)}', colors.warning),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _miniMetric('Opening balance', opening, colors.purple)),
+                const SizedBox(width: 8),
+                Expanded(child: _miniMetric('Chick purchase', chickCost, colors.info)),
+                const SizedBox(width: 8),
+                Expanded(child: _miniMetric('Daily records', daily, colors.warning)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 180,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _DonutChart(
+                      values: head.map((e) => e.value).toList(),
+                      colors: [
+                        colors.purple,
+                        colors.brand,
+                        colors.error,
+                        colors.warning,
+                        colors.info,
+                        colors.accent,
+                        colors.muted,
+                        colors.inkAlt,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: head
+                          .asMap()
+                          .entries
+                          .map((e) =>
+                              _legend(e.value.key, e.value.value, colors, e.key))
+                          .toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 20),
+            ...visible.map((e) => _metricRow(e.key, e.value, colors)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _timeSeriesSection(
@@ -1413,8 +1602,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     List<_SeriesPoint> eggs,
     List<_SeriesPoint> fcr,
     List<Map<String, dynamic>> records,
-    String? batchId,
-  ) {
+    String? batchId, [
+    double openingFeedKg = 0,
+  ]) {
     if (isLayer) {
       final totalEggs = eggs.fold<double>(0, (sum, point) => sum + point.value);
       final averageEggs = eggs.isEmpty ? 0.0 : totalEggs / eggs.length;
@@ -1529,10 +1719,13 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       );
     }
 
+    // Include feed carried over from before a mid-cycle batch was onboarded,
+    // otherwise FCR ignores the flock's whole early life.
     final totalFeed = records.fold<double>(
-      0,
-      (sum, record) => sum + _n(record['feed_kg']),
-    );
+          0,
+          (sum, record) => sum + _n(record['feed_kg']),
+        ) +
+        openingFeedKg;
     final averageFcr = fcr.isEmpty
         ? 0.0
         : fcr.fold<double>(0, (sum, point) => sum + point.value) / fcr.length;
@@ -1694,7 +1887,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   ])));
 
   Widget _analytics(AppColors colors, bool isLayer, bool isClosed, double cost, double revenue, double realized, double position, int initial, int sold) => Card(elevation: 0, child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
-    Row(children: [Expanded(child: _bigMetric(isClosed && !isLayer ? 'Actual Profit/Loss' : 'Realized Margin', '৳${_money.format(realized)}', realized >= 0 ? colors.brand : colors.error)), const SizedBox(width: 10), Expanded(child: _bigMetric(isLayer ? 'Estimated Position' : 'Recovery', isLayer ? '৳${_money.format(position)}' : '${cost <= 0 ? 0 : (revenue / cost * 100).toStringAsFixed(1)}%', isLayer ? (position >= 0 ? colors.brand : colors.error) : colors.info))]),
+    Row(children: [Expanded(child: _bigMetric(isClosed && !isLayer ? 'Realized P/L (cash)' : 'Realized Margin (cash)', '৳${_money.format(realized)}', realized >= 0 ? colors.brand : colors.error)), const SizedBox(width: 10), Expanded(child: _bigMetric(isLayer ? 'Estimated Position' : 'Recovery', isLayer ? '৳${_money.format(position)}' : '${cost <= 0 ? 0 : (revenue / cost * 100).toStringAsFixed(1)}%', isLayer ? (position >= 0 ? colors.brand : colors.error) : colors.info))]),
     const SizedBox(height: 16),
     SizedBox(height: 150, child: _BarChart(items: {'Cost': cost, 'Revenue': revenue, if (isLayer) 'Live stock': position - revenue + cost}, color: colors.brand, muted: colors.warning)),
     const SizedBox(height: 8),
