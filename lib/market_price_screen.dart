@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,11 +22,38 @@ class MarketPriceScreenV2 extends StatelessWidget {
 
 class _MarketPriceScreenState extends State<MarketPriceScreen> {
   final supabase = Supabase.instance.client;
+
+  // ─── Hardcoded PIN for rate update (change this as needed) ───
+  static const String _updatePin = '2468';
+
   bool _isLoading = true;
   String? _errorMessage;
   List<Map<String, dynamic>> _allPrices = [];
   Map<String, Map<String, dynamic>> _latestByCategory = {};
   Map<String, double?> _priceChanges = {};
+  Map<String, double?> _priceChangePercent = {};
+
+  // Category definitions matching the rest of the app
+  static const Map<String, String> _birdCategories = {
+    'broiler': 'Broiler Chicken (Live)',
+    'sonali': 'Sonali Chicken (Live)',
+    'desi': 'Desi Chicken (Live)',
+    'layer': 'Layer Chicken (Live)',
+  };
+
+  static const Map<String, String> _eggCategories = {
+    'table_egg': 'Table Egg',
+    'hatching_egg': 'Hatching Egg',
+  };
+
+  static const Map<String, IconData> _categoryIcons = {
+    'broiler': Icons.egg_alt_outlined,
+    'sonali': Icons.pets_outlined,
+    'desi': Icons.grass_outlined,
+    'layer': Icons.female_outlined,
+    'table_egg': Icons.egg_outlined,
+    'hatching_egg': Icons.egg_outlined,
+  };
 
   @override
   void initState() {
@@ -45,15 +73,16 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
           .select()
           .order('price_date', ascending: false)
           .order('created_at', ascending: false)
-          .limit(40);
+          .limit(60);
 
       final List<Map<String, dynamic>> data =
           List<Map<String, dynamic>>.from(response);
 
       final Map<String, Map<String, dynamic>> latestMap = {};
       final Map<String, double?> changeMap = {};
+      final Map<String, double?> percentMap = {};
 
-      // Group records by category to find latest and calculate trend
+      // Group by category → find latest + previous price for trend
       for (final row in data) {
         final category = (row['category'] ?? '').toString();
         if (category.isEmpty) continue;
@@ -61,10 +90,16 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
         if (!latestMap.containsKey(category)) {
           latestMap[category] = row;
         } else if (!changeMap.containsKey(category)) {
-          // Compare with previous price
           final currentPrice = _toDouble(latestMap[category]!['price_per_unit']);
           final prevPrice = _toDouble(row['price_per_unit']);
-          changeMap[category] = currentPrice - prevPrice;
+          final diff = currentPrice - prevPrice;
+          changeMap[category] = diff;
+
+          if (prevPrice > 0) {
+            percentMap[category] = (diff / prevPrice) * 100;
+          } else {
+            percentMap[category] = null;
+          }
         }
       }
 
@@ -73,6 +108,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
           _allPrices = data;
           _latestByCategory = latestMap;
           _priceChanges = changeMap;
+          _priceChangePercent = percentMap;
           _isLoading = false;
         });
       }
@@ -102,6 +138,433 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     }
   }
 
+  // ────────────────────────────────────────────────
+  // PIN Dialog → then open Update Form
+  // ────────────────────────────────────────────────
+  Future<void> _requestPinAndUpdate() async {
+    final pinController = TextEditingController();
+    final colors = context.colors;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.lock_outline, color: colors.warning, size: 22),
+              const SizedBox(width: 8),
+              const Text('Enter PIN', style: TextStyle(fontSize: 18)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Only authorized users can update market rates.',
+                style: TextStyle(fontSize: 13, color: colors.muted),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pinController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                autofocus: true,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: '4-digit PIN',
+                  counterText: '',
+                  prefixIcon: Icon(Icons.pin_outlined, color: colors.warning),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: colors.warning, width: 1.5),
+                  ),
+                ),
+                onSubmitted: (_) {
+                  if (pinController.text == _updatePin) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: colors.warning),
+              onPressed: () {
+                if (pinController.text == _updatePin) {
+                  Navigator.pop(ctx, true);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Incorrect PIN'),
+                      backgroundColor: colors.error,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    pinController.dispose();
+
+    if (ok == true && mounted) {
+      await _showUpdateForm();
+    }
+  }
+
+  // ────────────────────────────────────────────────
+  // Update Form (Bottom Sheet)
+  // ────────────────────────────────────────────────
+  Future<void> _showUpdateForm() async {
+    final colors = context.colors;
+
+    // Controllers for each category
+    final Map<String, TextEditingController> priceCtrls = {};
+    final Map<String, String> units = {};
+
+    for (final key in [..._birdCategories.keys, ..._eggCategories.keys]) {
+      final existing = _latestByCategory[key];
+      final currentPrice = existing != null
+          ? _toDouble(existing['price_per_unit']).toStringAsFixed(
+              (existing['unit'] == 'piece') ? 2 : 0)
+          : '';
+      priceCtrls[key] = TextEditingController(text: currentPrice);
+      units[key] = existing?['unit']?.toString() ??
+          (key.contains('egg') ? 'piece' : 'kg');
+    }
+
+    final locationCtrl = TextEditingController(
+        text: _latestByCategory.values.isNotEmpty
+            ? (_latestByCategory.values.first['market_location'] ?? 'National')
+            : 'National');
+    final notesCtrl = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+    bool isSaving = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: colors.line,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    Text(
+                      'Update Market Rates',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: colors.inkAlt,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Enter today\'s benchmark prices',
+                      style: TextStyle(fontSize: 13, color: colors.muted),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Date + Location
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime(2024),
+                                lastDate: DateTime.now().add(const Duration(days: 1)),
+                              );
+                              if (picked != null) {
+                                setModalState(() => selectedDate = picked);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Price Date',
+                                prefixIcon: Icon(Icons.calendar_today_outlined,
+                                    size: 18, color: colors.warning),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 14),
+                              ),
+                              child: Text(
+                                DateFormat('dd MMM yyyy').format(selectedDate),
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: locationCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Location',
+                              prefixIcon: Icon(Icons.location_on_outlined,
+                                  size: 18, color: colors.warning),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Birds Section
+                    Text(
+                      'BIRDS PRICE (per kg)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: colors.inkAlt,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._birdCategories.entries.map((e) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: TextField(
+                          controller: priceCtrls[e.key],
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: e.value,
+                            prefixText: '৳ ',
+                            suffixText: ' / kg',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(height: 8),
+                    Text(
+                      'EGG PRICE (per piece)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: colors.inkAlt,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._eggCategories.entries.map((e) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: TextField(
+                          controller: priceCtrls[e.key],
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: e.value,
+                            prefixText: '৳ ',
+                            suffixText: ' / piece',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                          ),
+                        ),
+                      );
+                    }),
+
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: notesCtrl,
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Notes (optional)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Save Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colors.warning,
+                          foregroundColor: colors.card,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                setModalState(() => isSaving = true);
+                                try {
+                                  final location = locationCtrl.text.trim().isEmpty
+                                      ? 'National'
+                                      : locationCtrl.text.trim();
+                                  final notes = notesCtrl.text.trim();
+                                  final dateStr = selectedDate
+                                      .toIso8601String()
+                                      .split('T')
+                                      .first;
+
+                                  final List<Map<String, dynamic>> rows = [];
+
+                                  for (final entry in {
+                                    ..._birdCategories,
+                                    ..._eggCategories
+                                  }.entries) {
+                                    final priceText =
+                                        priceCtrls[entry.key]!.text.trim();
+                                    if (priceText.isEmpty) continue;
+
+                                    final price = double.tryParse(priceText);
+                                    if (price == null || price < 0) continue;
+
+                                    final isEgg = entry.key.contains('egg');
+                                    rows.add({
+                                      'category': entry.key,
+                                      'item_name': entry.value,
+                                      'price_per_unit': price,
+                                      'unit': isEgg ? 'piece' : 'kg',
+                                      'market_location': location,
+                                      'price_date': dateStr,
+                                      'notes': notes.isEmpty ? null : notes,
+                                    });
+                                  }
+
+                                  if (rows.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text('Enter at least one price'),
+                                        backgroundColor: colors.error,
+                                      ),
+                                    );
+                                    setModalState(() => isSaving = false);
+                                    return;
+                                  }
+
+                                  await supabase.from('market_prices').insert(rows);
+
+                                  if (mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                            '${rows.length} rate(s) updated successfully'),
+                                        backgroundColor: colors.brand,
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
+                                    );
+                                    _fetchMarketPrices();
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to save: $e'),
+                                        backgroundColor: colors.error,
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  setModalState(() => isSaving = false);
+                                }
+                              },
+                        icon: isSaving
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colors.card,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          isSaving ? 'Saving...' : 'Save Rates',
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    // Dispose controllers
+    for (final c in priceCtrls.values) {
+      c.dispose();
+    }
+    locationCtrl.dispose();
+    notesCtrl.dispose();
+  }
+
+  // ────────────────────────────────────────────────
+  // Build
+  // ────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -111,7 +574,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Market Rate Bulletin',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
@@ -130,6 +593,11 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             tooltip: 'Refresh Rates',
             onPressed: _isLoading ? null : _fetchMarketPrices,
           ),
+          IconButton(
+            icon: const Icon(Icons.edit_note_outlined),
+            tooltip: 'Update Rates (PIN required)',
+            onPressed: _requestPinAndUpdate,
+          ),
         ],
       ),
       body: _buildBody(),
@@ -138,6 +606,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
 
   Widget _buildBody() {
     final colors = context.colors;
+
     if (_isLoading && _allPrices.isEmpty) {
       return Center(child: CircularProgressIndicator(color: colors.warning));
     }
@@ -177,7 +646,7 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
       onRefresh: _fetchMarketPrices,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           // Info banner
           Container(
@@ -193,75 +662,90 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Rates are published by Central Admin based on wholesale market trends.',
-                    style: TextStyle(fontSize: 12, color: colors.warning, fontWeight: FontWeight.w500),
+                    'Rates are published based on wholesale market trends. Tap the edit icon to update (PIN required).',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.warning,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 20),
+
+          // ── BIRDS SECTION ──
+          _sectionHeader('BIRDS PRICE', Icons.pets_outlined),
+          const SizedBox(height: 10),
+          ..._birdCategories.entries.map((e) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildCategoryCard(
+                categoryKey: e.key,
+                defaultTitle: e.value,
+                icon: _categoryIcons[e.key] ?? Icons.egg_alt_outlined,
+                accentColor: colors.warning,
+              ),
+            );
+          }),
+
           const SizedBox(height: 16),
 
-          // Bento Section: Live Snapshot
-          Text(
-            'TODAY\'S BENCHMARK RATES',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.inkAlt, letterSpacing: 0.8),
-          ),
+          // ── EGGS SECTION ──
+          _sectionHeader('EGG PRICE', Icons.egg_outlined),
           const SizedBox(height: 10),
-
-          _buildCategoryCard(
-            categoryKey: 'broiler',
-            defaultTitle: 'Broiler Chicken (Live)',
-            icon: Icons.egg_alt_outlined,
-            accentColor: colors.warning,
-          ),
-          const SizedBox(height: 10),
-
-          _buildCategoryCard(
-            categoryKey: 'sonali',
-            defaultTitle: 'Sonali Chicken (Live)',
-            icon: Icons.pets_outlined,
-            accentColor: colors.warning,
-          ),
-          const SizedBox(height: 10),
-
-          _buildCategoryCard(
-            categoryKey: 'desi',
-            defaultTitle: 'Desi Chicken (Live)',
-            icon: Icons.grass_outlined,
-            accentColor: colors.accent,
-          ),
-          const SizedBox(height: 10),
-
-          _buildCategoryCard(
-            categoryKey: 'table_egg',
-            defaultTitle: 'Red Table Egg',
-            icon: Icons.egg_outlined,
-            accentColor: colors.warning,
-          ),
+          ..._eggCategories.entries.map((e) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildCategoryCard(
+                categoryKey: e.key,
+                defaultTitle: e.value,
+                icon: _categoryIcons[e.key] ?? Icons.egg_outlined,
+                accentColor: colors.accent,
+              ),
+            );
+          }),
 
           const SizedBox(height: 24),
 
-          // Section 2: Recent Broadcast History
-          Text(
-            'RECENT BROADCAST BULLETINS',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.inkAlt, letterSpacing: 0.8),
-          ),
+          // ── HISTORY ──
+          _sectionHeader('RECENT BROADCASTS', Icons.history),
           const SizedBox(height: 10),
 
           if (_allPrices.isEmpty)
             Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
-                child: Text('No broadcast history available.', style: TextStyle(color: colors.muted)),
+                child: Text(
+                  'No broadcast history available.',
+                  style: TextStyle(color: colors.muted),
+                ),
               ),
             )
           else
             ..._allPrices.map((row) => _buildHistoryCard(row)),
-          
-          const SizedBox(height: 30),
         ],
       ),
+    );
+  }
+
+  Widget _sectionHeader(String title, IconData icon) {
+    final colors = context.colors;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: colors.inkAlt),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: colors.inkAlt,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
     );
   }
 
@@ -275,11 +759,12 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     final row = _latestByCategory[categoryKey];
     final hasData = row != null;
     final price = hasData ? _toDouble(row['price_per_unit']) : 0.0;
-    final unit = hasData ? (row['unit'] ?? 'kg') : 'kg';
+    final unit = hasData ? (row['unit'] ?? 'kg') : (categoryKey.contains('egg') ? 'piece' : 'kg');
     final itemName = hasData ? (row['item_name'] ?? defaultTitle) : defaultTitle;
     final location = hasData ? (row['market_location'] ?? 'National') : 'National';
     final dateStr = hasData ? _formatDate(row['price_date']) : 'Pending';
     final change = _priceChanges[categoryKey];
+    final percent = _priceChangePercent[categoryKey];
 
     return Container(
       decoration: BoxDecoration(
@@ -312,16 +797,23 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               children: [
                 Text(
                   itemName,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colors.inkAlt),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: colors.inkAlt,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Row(
                   children: [
                     Icon(Icons.location_on_outlined, size: 12, color: colors.muted),
                     const SizedBox(width: 3),
-                    Text(
-                      location,
-                      style: TextStyle(fontSize: 11, color: colors.muted),
+                    Flexible(
+                      child: Text(
+                        location,
+                        style: TextStyle(fontSize: 11, color: colors.muted),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.calendar_today_outlined, size: 11, color: colors.muted),
@@ -339,7 +831,9 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                hasData ? '৳ ${price.toStringAsFixed(unit == 'piece' ? 2 : 0)}' : '---',
+                hasData
+                    ? '৳ ${price.toStringAsFixed(unit == 'piece' ? 2 : 0)}'
+                    : '---',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   fontSize: 17,
@@ -351,8 +845,8 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
                 style: TextStyle(fontSize: 11, color: colors.muted),
               ),
               if (change != null) ...[
-                const SizedBox(height: 2),
-                _buildTrendBadge(change),
+                const SizedBox(height: 3),
+                _buildTrendBadge(change, percent),
               ],
             ],
           ),
@@ -361,37 +855,52 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     );
   }
 
-  Widget _buildTrendBadge(double diff) {
+  Widget _buildTrendBadge(double diff, double? percent) {
     final colors = context.colors;
+
     if (diff > 0) {
+      final percentText = percent != null
+          ? ' (↑ ${percent.toStringAsFixed(1)}%)'
+          : '';
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: colors.successSoft,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: colors.brandSoft),
         ),
         child: Text(
-          '▲ +৳${diff.toStringAsFixed(1)}',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.brand),
+          '▲ +৳${diff.toStringAsFixed(1)}$percentText',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: colors.brand,
+          ),
         ),
       );
     } else if (diff < 0) {
+      final percentText = percent != null
+          ? ' (↓ ${percent.abs().toStringAsFixed(1)}%)'
+          : '';
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: colors.errorSoft,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: colors.errorBorder),
         ),
         child: Text(
-          '▼ -৳${diff.abs().toStringAsFixed(1)}',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colors.error),
+          '▼ -৳${diff.abs().toStringAsFixed(1)}$percentText',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: colors.error,
+          ),
         ),
       );
     } else {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
           color: colors.surfaceAlt,
           borderRadius: BorderRadius.circular(4),
@@ -412,6 +921,10 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
     final location = row['market_location'] ?? 'National';
     final dateStr = _formatDate(row['price_date']);
     final notes = (row['notes'] ?? '').toString().trim();
+    final category = (row['category'] ?? '').toString();
+
+    final isEgg = category.contains('egg');
+    final accent = isEgg ? colors.accent : colors.warning;
 
     return Card(
       elevation: 0,
@@ -432,12 +945,19 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
                 Expanded(
                   child: Text(
                     itemName,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 Text(
                   '৳ ${price.toStringAsFixed(unit == 'piece' ? 2 : 0)} / $unit',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colors.warning),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: accent,
+                  ),
                 ),
               ],
             ),
@@ -461,7 +981,11 @@ class _MarketPriceScreenState extends State<MarketPriceScreen> {
               const SizedBox(height: 4),
               Text(
                 'Note: $notes',
-                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: colors.inkAlt),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: colors.inkAlt,
+                ),
               ),
             ],
           ],
