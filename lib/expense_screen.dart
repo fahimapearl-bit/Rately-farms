@@ -307,7 +307,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final today = DateTime.now();
     final a = DateTime(start.year, start.month, start.day);
     final z = DateTime(today.year, today.month, today.day);
-    return math.max(0, z.difference(a).inDays + 1 + _startAgeDays(b));
+    // Age comes from start_date alone (Day 1 = start_date). Mid-cycle batches
+    // store a back-dated start_date, so no start_age_days offset here.
+    return math.max(0, z.difference(a).inDays + 1);
   }
 
   String _batchLabel(Map<String, dynamic> b) =>
