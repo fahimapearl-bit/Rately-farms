@@ -35,6 +35,17 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
   /// balance already incurred).
   bool isMidCycle = false;
 
+  /// The real start date saved to the database (Day 1 = start date).
+  /// For a mid-cycle batch it is derived from today's age: today - (age - 1),
+  /// so every screen can work out the age from `start_date` alone.
+  DateTime get _effectiveStart {
+    if (!isMidCycle) return startDate;
+    final now = DateTime.now();
+    final age = int.tryParse(midCycleAgeCtrl.text.trim()) ?? 0;
+    if (age < 1) return DateTime(now.year, now.month, now.day);
+    return DateTime(now.year, now.month, now.day - (age - 1));
+  }
+
   final meatCategories = ['Broiler', 'Sonali', 'Deshi', 'Other'];
   final eggCategories = ['Layer', 'Sonali', 'Deshi', 'Other'];
 
@@ -153,14 +164,6 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           ? 'Bird Production'
           : 'Egg Production';
 
-      // Mid-cycle: the picked date is the entry date, so the real start date
-      // is (age - 1) days earlier. All screens then derive age from
-      // start_date alone (Day 1 = start_date).
-      final entryAge = int.tryParse(midCycleAgeCtrl.text.trim()) ?? 1;
-      final effectiveStart = isMidCycle
-          ? startDate.subtract(Duration(days: entryAge < 1 ? 0 : entryAge - 1))
-          : startDate;
-
       await client.from('batches').insert({
         'user_id': user.id,
         'name': nameController.text.trim(),
@@ -175,12 +178,12 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
             : sourceController.text.trim(),
         'shed': shedController.text.trim(),
         'notes': notesController.text.trim(),
-        'start_date': effectiveStart.toIso8601String().split('T').first,
+        'start_date': _effectiveStart.toIso8601String().split('T').first,
         'status': 'Active',
 
         // Mid-cycle onboarding (all 0 for a batch that starts from day 1).
-        'start_age_days':
-            isMidCycle ? (int.tryParse(midCycleAgeCtrl.text.trim()) ?? 0) : 0,
+        // Age is derived from start_date alone, so this stays 0.
+        'start_age_days': 0,
         'opening_feed_kg':
             isMidCycle ? (double.tryParse(openingFeedCtrl.text.trim()) ?? 0) : 0,
         'opening_cost':
@@ -421,16 +424,17 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
 
   Widget _dateField() {
     final colors = context.colors;
+    final shown = _effectiveStart;
     final formatted =
-        '${startDate.day.toString().padLeft(2, '0')}/'
-        '${startDate.month.toString().padLeft(2, '0')}/${startDate.year}';
+        '${shown.day.toString().padLeft(2, '0')}/'
+        '${shown.month.toString().padLeft(2, '0')}/${shown.year}';
 
     return InkWell(
-      onTap: pickDate,
+      onTap: isMidCycle ? null : pickDate,
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: _inputDecoration(
-          isMidCycle ? 'Entry date (today)' : 'Batch start date',
+          isMidCycle ? 'Start date (calculated from age)' : 'Batch start date',
           icon: Icons.calendar_today_outlined,
         ),
         child: Row(
@@ -441,7 +445,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             Text(
-              'Change',
+              isMidCycle ? '' : 'Change',
               style: TextStyle(
                 color: context.colors.brand,
                 fontWeight: FontWeight.w700,
@@ -620,10 +624,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                                 icon: Icons.numbers_outlined,
                               ),
                               validator: isMidCycle
-                                  ? (v) => int.tryParse(v?.trim() ?? '') == null ||
-                                          int.parse(v!.trim()) < 0
-                                      ? 'Enter birds alive today (0 or more)'
-                                      : null
+                                  ? _nonNegativeInteger
                                   : _positiveInteger,
                             ),
                         ),
@@ -669,6 +670,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                             child: TextFormField(
                               controller: midCycleAgeCtrl,
                               keyboardType: TextInputType.number,
+                              onChanged: (_) => setState(() {}),
                               decoration: _inputDecoration(
                                 'Current age (days) *',
                                 hint: '10',
