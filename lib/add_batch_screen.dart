@@ -153,6 +153,14 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           ? 'Bird Production'
           : 'Egg Production';
 
+      // Mid-cycle: the picked date is the entry date, so the real start date
+      // is (age - 1) days earlier. All screens then derive age from
+      // start_date alone (Day 1 = start_date).
+      final entryAge = int.tryParse(midCycleAgeCtrl.text.trim()) ?? 1;
+      final effectiveStart = isMidCycle
+          ? startDate.subtract(Duration(days: entryAge < 1 ? 0 : entryAge - 1))
+          : startDate;
+
       await client.from('batches').insert({
         'user_id': user.id,
         'name': nameController.text.trim(),
@@ -167,7 +175,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
             : sourceController.text.trim(),
         'shed': shedController.text.trim(),
         'notes': notesController.text.trim(),
-        'start_date': startDate.toIso8601String().split('T').first,
+        'start_date': effectiveStart.toIso8601String().split('T').first,
         'status': 'Active',
 
         // Mid-cycle onboarding (all 0 for a batch that starts from day 1).
@@ -422,7 +430,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: _inputDecoration(
-          'Batch start date',
+          isMidCycle ? 'Entry date (today)' : 'Batch start date',
           icon: Icons.calendar_today_outlined,
         ),
         child: Row(
@@ -612,7 +620,10 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                                 icon: Icons.numbers_outlined,
                               ),
                               validator: isMidCycle
-                                  ? _nonNegativeInteger
+                                  ? (v) => int.tryParse(v?.trim() ?? '') == null ||
+                                          int.parse(v!.trim()) < 0
+                                      ? 'Enter birds alive today (0 or more)'
+                                      : null
                                   : _positiveInteger,
                             ),
                         ),

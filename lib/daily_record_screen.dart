@@ -266,7 +266,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       _selectedDate.month,
       _selectedDate.day,
     );
-    final diff = d.difference(s).inDays + 1 + _startAgeDays;
+    // Age comes from start_date alone (Day 1 = start_date). Mid-cycle batches
+    // store a back-dated start_date, so no start_age_days offset here.
+    final diff = d.difference(s).inDays + 1;
     return diff < 0 ? 0 : diff;
   }
 

@@ -135,8 +135,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
   }
 
   int _calculateAgeDays(DateTime startDate, DateTime onDate) {
-    final diff = onDate.difference(startDate).inDays;
-    return diff < 0 ? 0 : diff;
+    // Day 1 = start_date (same convention as the daily record screen).
+    final diff = onDate.difference(startDate).inDays + 1;
+    return diff < 1 ? 1 : diff;
   }
 
   Future<void> _saveWeightEntry() async {
