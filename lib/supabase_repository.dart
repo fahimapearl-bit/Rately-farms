@@ -66,6 +66,27 @@ class SupabaseRepository {
     return DailyRecord.fromJson(Map<String, dynamic>.from(result));
   }
 
+  Future<DailyRecord> updateDailyRecord(DailyRecord item) async {
+    _requireSession();
+    final result = await client
+        .from('daily_records')
+        .update({
+          'record_date': item.date.toIso8601String().split('T').first,
+          'shed_number': item.shedNumber,
+          'feed_type': item.feedType,
+          'feed_kg': item.feedKg,
+          'water_litre': item.waterLitre,
+          'eggs_collected': item.eggsCollected,
+          'mortality': item.mortality,
+          'remarks': item.remarks,
+        })
+        .eq('id', item.id)
+        .eq('user_id', userId)
+        .select()
+        .single();
+    return DailyRecord.fromJson(Map<String, dynamic>.from(result));
+  }
+
   Future<void> deleteDailyRecord(String id) async {
     _requireSession();
     await client.from('daily_records').delete().eq('id', id).eq('user_id', userId);

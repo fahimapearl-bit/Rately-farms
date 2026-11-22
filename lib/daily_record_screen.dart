@@ -52,10 +52,13 @@ extension RecordSessionX on RecordSession {
 ///  * **Eggs are edited here.** The Layer Performance screen is opened only to
 ///    read HDP / trend analysis, so eggs are never counted twice.
 class DailyRecordPageNew extends StatefulWidget {
-  const DailyRecordPageNew({super.key, this.initialBatchId});
+  const DailyRecordPageNew({super.key, this.initialBatchId, this.initialRecordId});
 
   /// Optional: open directly on a specific batch.
   final String? initialBatchId;
+
+  /// Optional: open this saved record in the form for editing.
+  final String? initialRecordId;
 
   @override
   State<DailyRecordPageNew> createState() => _DailyRecordPageNewState();
@@ -73,6 +76,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _schemaReady = true;
+  bool _feedTypeReady = true; // daily_records.feed_type column আছে কিনা
   String? _schemaWarning;
 
   List<Map<String, dynamic>> _batches = [];
@@ -86,9 +90,6 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
   /// Batch-level expenses booked on the Expenses screen.
   double _batchExpenses = 0;
-
-  /// Birds sold from the selected batch (sales table, Bird rows only).
-  int _birdsSoldFromSales = 0;
 
   /// Set when a row for (batch, date, session) already exists.
   String? _editingRecordId;
@@ -119,6 +120,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   final _marketPriceCtrl = TextEditingController();
   final _eggPriceCtrl = TextEditingController();
   final _remarksCtrl = TextEditingController();
+  final _feedTypeCtrl = TextEditingController();
 
   List<TextEditingController> get _allControllers => [
     _feedKgCtrl,
@@ -168,6 +170,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       c.removeListener(_recalc);
       c.dispose();
     }
+    _feedTypeCtrl.dispose();
     super.dispose();
   }
 
@@ -234,10 +237,6 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   int get eggsDamaged => _parseInt(_eggsDamagedCtrl);
   int get eggsTotal => isLayerBatch ? eggsGood + eggsDamaged : 0;
 
-  /// Revenue values only good eggs at the good-egg rate; damaged eggs are
-  /// reported separately (they sell at a fraction of the price).
-  int get revenueEggs => isLayerBatch ? eggsGood : 0;
-
   double get avgWeightKg => _parse(_avgWeightCtrl);
   double get marketPricePerKg => _parse(_marketPriceCtrl);
   double get eggPricePerPiece => _parse(_eggPriceCtrl);
@@ -257,13 +256,8 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   int get _totalMortality =>
       _records.fold<int>(0, (s, r) => s + _int(r['mortality']));
 
-  /// Birds sold from this batch, loaded from the sales table by
-  /// _loadBatchContext (daily_records rows carry no sale data). Reversed
-  /// sales keep their old row with is_reversed = true and are not counted.
-  int get _birdsSold => _birdsSoldFromSales;
-
   int get activeBirds {
-    final a = _initialBirds + _addedBirds - _totalMortality - _birdsSold;
+    final a = _initialBirds + _addedBirds - _totalMortality;
     return a < 0 ? 0 : a;
   }
 
@@ -278,9 +272,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       _selectedDate.month,
       _selectedDate.day,
     );
-    // Age comes from start_date alone (Day 1 = start_date). Mid-cycle batches
-    // store a back-dated start_date, so no start_age_days offset here.
-    final diff = d.difference(s).inDays + 1;
+    final diff = d.difference(s).inDays + 1 + _startAgeDays;
     return diff < 0 ? 0 : diff;
   }
 
@@ -348,9 +340,8 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   double get estimatedFlockValue =>
       activeBirds * avgWeightKg * marketPricePerKg;
 
-  /// Today's good eggs at today's egg rate (layer batches only).
-  /// Damaged eggs are excluded — they are not sold at the good-egg price.
-  double get eggRevenueToday => revenueEggs * eggPricePerPiece;
+  /// Today's eggs at today's egg rate (layer batches only).
+  double get eggRevenueToday => eggsTotal * eggPricePerPiece;
 
   double get costPerBird =>
       activeBirds == 0 ? 0 : batchCumulativeAfterSave / activeBirds;
@@ -367,6 +358,12 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
     } catch (_) {
       _schemaReady = false;
       _schemaWarning = 'Cost/session columns are missing in Supabase. Run supabase_daily_cost_migration.sql first.';
+    }
+    try {
+      await _supabase.from('daily_records').select('feed_type').limit(1);
+      _feedTypeReady = true;
+    } catch (_) {
+      _feedTypeReady = false;
     }
   }
 
@@ -409,6 +406,14 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
           _selectedBatch!['id'].toString(),
           prefill: true,
         );
+        if (widget.initialRecordId != null && mounted) {
+          for (final r in _records) {
+            if (r['id']?.toString() == widget.initialRecordId) {
+              _loadRecordIntoForm(r, announce: true);
+              break;
+            }
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -450,26 +455,10 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
       final records = List<Map<String, dynamic>>.from(rows);
 
-      int sold = 0;
-      try {
-        final salesRows = await _supabase
-            .from('sales')
-            .select('quantity, sale_type, is_reversed')
-            .eq('batch_id', batchId);
-        for (final s in List<Map<String, dynamic>>.from(salesRows)) {
-          if ('${s['sale_type'] ?? ''}' == 'Bird' && s['is_reversed'] != true) {
-            sold += _int(s['quantity']);
-          }
-        }
-      } catch (_) {
-        // Sales table is optional for this screen.
-      }
-
       if (!mounted) return;
       setState(() {
         _records = records;
         _batchExpenses = exp;
-        _birdsSoldFromSales = sold;
       });
 
       _syncFormWithExistingRow();
@@ -655,6 +644,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
           ? ''
           : _num(r['egg_price_per_piece']).toString();
       _remarksCtrl.text = (r['remarks'] ?? '').toString();
+      _feedTypeCtrl.text = (r['feed_type'] ?? '').toString();
     });
 
     if (announce) {
@@ -715,6 +705,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
     for (final c in _allControllers) {
       c.clear();
     }
+    _feedTypeCtrl.clear();
     _sampleSizeCtrl.text = '10';
     setState(() {
       _editingRecordId = null;
@@ -742,6 +733,10 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       'mortality': _parseInt(_mortalityCtrl),
       'remarks': _remarksCtrl.text.trim(),
     };
+
+    if (_feedTypeReady) {
+      payload['feed_type'] = _feedTypeCtrl.text.trim();
+    }
 
     if (_schemaReady) {
       payload.addAll({
@@ -986,6 +981,8 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
               total: feedApplied,
               tint: colors.brand,
             ),
+            const SizedBox(height: 10),
+            _feedTypeField(),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -1663,6 +1660,57 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       ),
+    );
+  }
+
+  /// Ready-made feed types by batch kind (egg/layer vs meat/bird).
+  List<String> get _feedTypePresets => isLayerBatch
+      ? const ['Chick Starter', 'Grower', 'Pre-layer', 'Layer', 'Layer 2']
+      : const ['Starter', 'Grower', 'Finisher'];
+
+  /// Feed type: free text + one-tap chips (presets for this batch kind, plus
+  /// any other types already used in this batch).
+  Widget _feedTypeField() {
+    final options = <String>[..._feedTypePresets];
+    for (final r in _records) {
+      final t = (r['feed_type'] ?? '').toString().trim();
+      if (t.isNotEmpty && !options.contains(t)) options.add(t);
+      if (options.length >= _feedTypePresets.length + 4) break;
+    }
+    final current = _feedTypeCtrl.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _feedTypeCtrl,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            labelText: 'Feed type',
+            isDense: true,
+            prefixIcon: const Icon(Icons.category_outlined, size: 18),
+            helperText: _feedTypeReady
+                ? null
+                : 'feed_type column নেই — Supabase-এ column যোগ না করলে এটা save হবে না',
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: options
+                .map((t) => ChoiceChip(
+                      label: Text(t),
+                      selected: current == t,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) => setState(() => _feedTypeCtrl.text = t),
+                    ))
+                .toList(),
+          ),
+        ),
+      ],
     );
   }
 
