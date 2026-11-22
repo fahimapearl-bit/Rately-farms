@@ -87,6 +87,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   /// Batch-level expenses booked on the Expenses screen.
   double _batchExpenses = 0;
 
+  /// Birds sold from the selected batch (sales table, Bird rows only).
+  int _birdsSoldFromSales = 0;
+
   /// Set when a row for (batch, date, session) already exists.
   String? _editingRecordId;
   double _editingSavedTotal = 0;
@@ -231,6 +234,10 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   int get eggsDamaged => _parseInt(_eggsDamagedCtrl);
   int get eggsTotal => isLayerBatch ? eggsGood + eggsDamaged : 0;
 
+  /// Revenue values only good eggs at the good-egg rate; damaged eggs are
+  /// reported separately (they sell at a fraction of the price).
+  int get revenueEggs => isLayerBatch ? eggsGood : 0;
+
   double get avgWeightKg => _parse(_avgWeightCtrl);
   double get marketPricePerKg => _parse(_marketPriceCtrl);
   double get eggPricePerPiece => _parse(_eggPriceCtrl);
@@ -250,8 +257,13 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   int get _totalMortality =>
       _records.fold<int>(0, (s, r) => s + _int(r['mortality']));
 
+  /// Birds sold from this batch, loaded from the sales table by
+  /// _loadBatchContext (daily_records rows carry no sale data). Reversed
+  /// sales keep their old row with is_reversed = true and are not counted.
+  int get _birdsSold => _birdsSoldFromSales;
+
   int get activeBirds {
-    final a = _initialBirds + _addedBirds - _totalMortality;
+    final a = _initialBirds + _addedBirds - _totalMortality - _birdsSold;
     return a < 0 ? 0 : a;
   }
 
@@ -336,8 +348,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   double get estimatedFlockValue =>
       activeBirds * avgWeightKg * marketPricePerKg;
 
-  /// Today's eggs at today's egg rate (layer batches only).
-  double get eggRevenueToday => eggsTotal * eggPricePerPiece;
+  /// Today's good eggs at today's egg rate (layer batches only).
+  /// Damaged eggs are excluded — they are not sold at the good-egg price.
+  double get eggRevenueToday => revenueEggs * eggPricePerPiece;
 
   double get costPerBird =>
       activeBirds == 0 ? 0 : batchCumulativeAfterSave / activeBirds;
@@ -437,10 +450,26 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
       final records = List<Map<String, dynamic>>.from(rows);
 
+      int sold = 0;
+      try {
+        final salesRows = await _supabase
+            .from('sales')
+            .select('quantity, sale_type, is_reversed')
+            .eq('batch_id', batchId);
+        for (final s in List<Map<String, dynamic>>.from(salesRows)) {
+          if ('${s['sale_type'] ?? ''}' == 'Bird' && s['is_reversed'] != true) {
+            sold += _int(s['quantity']);
+          }
+        }
+      } catch (_) {
+        // Sales table is optional for this screen.
+      }
+
       if (!mounted) return;
       setState(() {
         _records = records;
         _batchExpenses = exp;
+        _birdsSoldFromSales = sold;
       });
 
       _syncFormWithExistingRow();

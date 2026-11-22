@@ -50,7 +50,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
 
       num lost = 0;
       for (final l in logs) {
-        lost += _n(l['mortality_count'] ?? l['mortality']) + _n(l['culled'] ?? l['culling']);
+        lost += _n(l['mortality_count'] ?? l['mortality']) + _n(l['culling_count'] ?? l['culled']);
       }
       final birds = (_n(batch['initial_birds']) - lost).toInt();
 
@@ -79,7 +79,7 @@ class _LayerSnapshotCardState extends State<LayerSnapshotCard> {
     final feedKg = log == null ? 0 : _n(log['feed_consumed_kg'] ?? log['feed_consumed'] ?? log['feed_kg']);
     final hdp = _currentBirds > 0 ? eggs / _currentBirds * 100 : 0;
     final feedPerEgg = eggs > 0 ? feedKg * 1000 / eggs : 0;
-    final mortality = log == null ? 0 : _n(log['mortality']);
+    final mortality = log == null ? 0 : _n(log['mortality_count'] ?? log['mortality']);
 
     return Padding(
       padding: const EdgeInsets.only(top: 12),

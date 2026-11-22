@@ -55,6 +55,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   List<Map<String, dynamic>> _adjustments = [];
   List<Map<String, dynamic>> _weights = [];
   List<Map<String, dynamic>> _birdAdditions = [];
+  List<Map<String, dynamic>> _layerLogs = [];
   bool _additionsLoaded = false;
   String? _selectedActiveBatchId;
   String? _selectedClosedBatchId;
@@ -122,6 +123,15 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         additionsLoaded = true;
       } catch (_) {
         // table missing on very old installs: fall back to batches.additional_birds
+      }
+      try {
+        final logs = await _client
+            .from('layer_daily_logs')
+            .select('batch_id, mortality_count, culling_count')
+            .eq('user_id', user.id);
+        _layerLogs = List<Map<String, dynamic>>.from(logs as List);
+      } catch (_) {
+        // Layer logs only exist for layer batches.
       }
       if (!mounted) return;
       final batches = List<Map<String, dynamic>>.from(results[0] as List);
@@ -218,6 +228,27 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   /// Birds ever owned by the batch: bought + added later (add1, add2, ...).
   int _totalBirds(Map<String, dynamic> b) =>
       _i(b['initial_birds']) + _additionalBirds(b);
+
+  /// Layer batches log deaths and culls in layer_daily_logs, not in
+  /// daily_records; broiler batches keep the daily_records path.
+  int _mortalityOf(String batchId, bool isLayer, List<Map<String, dynamic>> records) {
+    if (!isLayer) {
+      return records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
+    }
+    return _layerLogs
+        .where((l) => '${l['batch_id']}' == batchId)
+        .fold<int>(0, (sum, l) => sum + _i(l['mortality_count']) + _i(l['culling_count']));
+  }
+
+  /// Records are ordered record_date DESC, so the newest NON-BLANK price is
+  /// the first row with a value > 0 — not simply records.first.
+  double _latestNonZeroPrice(List<Map<String, dynamic>> records, String key) {
+    for (final r in records) {
+      final v = _n(r[key]);
+      if (v > 0) return v;
+    }
+    return 0.0;
+  }
 
   /// Average weight as of [asOf], computed with the same interpolateWeight()
   /// the sales screen uses. Weekly weights are the source; daily_records
@@ -471,7 +502,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final totalRunningCost =
         chickCost + openingCost + dailyCost + adjustmentCost;
 
-    final mortality = records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
+    final mortality = _mortalityOf(batchId, _batchType(batch) == 'Layer', records);
     final birdsSold = sales.where((s) => s['sale_type'] == 'Bird').fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final remainingLiveBirds = math.max(0, initialBirds - mortality - birdsSold).toInt();
     final costPerLiveBird = remainingLiveBirds > 0
@@ -483,14 +514,14 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final weightEstimated = wNow?.isEstimated ?? false;
     final totalLiveWeightKg = remainingLiveBirds * latestWeight;
     final costPerKg = totalLiveWeightKg > 0 ? totalRunningCost / totalLiveWeightKg : 0.0;
-    final marketPrice = records.isNotEmpty ? _n(records.first['market_price_per_kg']) : 0.0;
+    final marketPrice = _latestNonZeroPrice(records, 'market_price_per_kg');
     final estimatedLiveValuation = totalLiveWeightKg * marketPrice;
 
     final isLayer = _batchType(batch) == 'Layer';
     final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
     final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final currentEggStock = math.max(0, eggsCollected - eggsSold).toInt();
-    final eggPrice = records.isNotEmpty ? _n(records.first['egg_price_per_piece']) : 0.0;
+    final eggPrice = _latestNonZeroPrice(records, 'egg_price_per_piece');
     final eggValuation = currentEggStock * eggPrice;
 
     final partialRevenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
@@ -608,14 +639,14 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final soldWeight = sales.where((s) => s['sale_type'] == 'Bird').fold<double>(0, (sum, s) => sum + _n(s['weight_kg']));
     final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
     final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
-    final mortality = records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
+    final mortality = _mortalityOf(batchId, _batchType(batch) == 'Layer', records);
     final remainingBirds = math.max(0, initialBirds - mortality - birdsSold).toInt();
     final wNow = _weightAt(weights, records);
     final latestWeight = wNow?.kg ?? 0.0;
-    final marketPrice = records.isEmpty ? 0.0 : _n(records.first['market_price_per_kg']);
+    final marketPrice = _latestNonZeroPrice(records, 'market_price_per_kg');
     final liveValue = remainingBirds * latestWeight * marketPrice;
     final currentEggStock = math.max(0, eggsCollected - eggsSold).toInt();
-    final eggPrice = records.isEmpty ? 0.0 : _n(records.first['egg_price_per_piece']);
+    final eggPrice = _latestNonZeroPrice(records, 'egg_price_per_piece');
     final eggValue = currentEggStock * eggPrice;
     final isLayer = _batchType(batch) == 'Layer';
     final netProfit = totalRevenue - totalCost;

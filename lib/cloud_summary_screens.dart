@@ -1021,13 +1021,16 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
     final avgWeight = weights.isEmpty ? 0.0 : weights.first.averageWeightKg;
 
     final birdsSold = sales.where((s) => s.type == 'Bird').fold(0, (sum, s) => sum + s.quantity);
-    final currentBirds = (batch.initialBirds - mortality - birdsSold).clamp(0, batch.initialBirds);
+    // Denominator includes birds added later (add1, add2, ...); sold birds are
+    // alive, so they leave the head-count but not the survival percentage.
+    final totalBirds = batch.totalBirds;
+    final currentBirds = (totalBirds - mortality - birdsSold).clamp(0, totalBirds);
     final netCash = income - expense;
     final isSurplus = netCash >= 0;
 
-    final survivalPct = batch.initialBirds > 0 ? (currentBirds / batch.initialBirds) * 100 : 0.0;
-    final mortalityPct = batch.initialBirds > 0 ? (mortality / batch.initialBirds) * 100 : 0.0;
-    final soldPct = batch.initialBirds > 0 ? (birdsSold / batch.initialBirds) * 100 : 0.0;
+    final survivalPct = totalBirds > 0 ? ((totalBirds - mortality) / totalBirds) * 100 : 0.0;
+    final mortalityPct = totalBirds > 0 ? (mortality / totalBirds) * 100 : 0.0;
+    final soldPct = totalBirds > 0 ? (birdsSold / totalBirds) * 100 : 0.0;
 
     // Group expenses by type
     final Map<String, double> expenseByType = {};
@@ -1041,8 +1044,16 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
 
     // FCR estimation if broiler / meat
     final isEggType = batch.productionType.toLowerCase().contains('egg');
-    final double? fcr = (!isEggType && avgWeight > 0 && currentBirds > 0 && feed > 0)
-        ? (feed / ((currentBirds * avgWeight) + (birdsSold * (avgWeight > 0 ? avgWeight : 1.5))))
+    // FCR denominator: live biomass + actual sold weights + estimated weight
+    // of dead birds (they consumed feed too). Valuing sold birds at today's
+    // avg weight understated FCR; sales.weight_kg is the real weight at sale.
+    final double soldWeightKg = sales
+        .where((s) => s.type == 'Bird' && s.weightKg != null)
+        .fold(0.0, (sum, s) => sum + s.weightKg!);
+    final double deadWeightKg = mortality * (avgWeight > 0 ? avgWeight : 0.0);
+    final double fcrDenominatorKg = (currentBirds * avgWeight) + soldWeightKg + deadWeightKg;
+    final double? fcr = (!isEggType && avgWeight > 0 && currentBirds > 0 && feed > 0 && fcrDenominatorKg > 0)
+        ? (feed / fcrDenominatorKg)
         : null;
 
     return RefreshIndicator(

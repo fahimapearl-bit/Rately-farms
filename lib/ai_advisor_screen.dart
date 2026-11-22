@@ -22,6 +22,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
 
   // Real-time Actual Metrics
   int _initialBirds = 0;
+  int _addedBirds = 0;
   int _currentBirds = 0;
   int _totalMortality = 0;
   int _birdsSold = 0;
@@ -59,7 +60,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     try {
       final res = await _supabase
           .from('batches')
-          .select('id, name, production_type, breed, shed, start_date, initial_birds, chick_price, status')
+          .select('id, name, production_type, breed, shed, start_date, initial_birds, additional_birds, start_age_days, opening_cost, chick_price, status')
           .eq('status', 'Active')
           .order('start_date', ascending: false);
 
@@ -92,6 +93,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           .single();
       _selectedBatch = batchRes;
       _initialBirds = (batchRes['initial_birds'] as num?)?.toInt() ?? 0;
+      _addedBirds = (batchRes['additional_birds'] as num?)?.toInt() ?? 0;
 
       // Age calculation
       DateTime? startDate;
@@ -99,7 +101,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         startDate = DateTime.tryParse(batchRes['start_date'].toString());
       }
       if (startDate != null) {
-        _flockAgeDays = DateTime.now().difference(startDate).inDays;
+        // Day 1 = start_date, matching the other screens' age convention.
+        _flockAgeDays = DateTime.now().difference(startDate).inDays + 1;
       } else {
         _flockAgeDays = 0;
       }
@@ -134,7 +137,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
           if (firstEggDate == null && rowEggs > 0 && row['log_date'] != null) {
             firstEggDate = DateTime.tryParse(row['log_date'].toString());
             if (firstEggDate != null && startDate != null) {
-              firstEggAgeDays = firstEggDate.difference(startDate).inDays;
+              // Day 1 = start_date, consistent with flock age elsewhere.
+              firstEggAgeDays = firstEggDate.difference(startDate).inDays + 1;
             }
           }
         }
@@ -157,12 +161,14 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       // 3. Sales (revenue + sold birds count)
       final salesRes = await _supabase
           .from('sales')
-          .select('sale_type, quantity, weight_kg, unit_price')
+          .select('sale_type, quantity, weight_kg, unit_price, is_reversed')
           .eq('batch_id', batchId);
 
       double sumSales = 0.0;
       int soldCount = 0;
       for (var s in salesRes) {
+        // Edited sales keep their old row with is_reversed = true: skip those.
+        if (s['is_reversed'] == true) continue;
         final qty = (s['quantity'] as num?)?.toDouble() ?? 0.0;
         final price = (s['unit_price'] as num?)?.toDouble() ?? 0.0;
         final wt = (s['weight_kg'] as num?)?.toDouble();
@@ -177,7 +183,8 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
       }
       _birdsSold = soldCount;
       _totalSales = sumSales;
-      _currentBirds = (_initialBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
+      _currentBirds =
+          (_initialBirds + _addedBirds - _totalMortality - _birdsSold).clamp(0, 9999999);
 
       // 4. Latest Average Weight (Meat & Layer)
       final weightRes = await _supabase
@@ -208,10 +215,19 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         sumExp += (row['amount'] as num?)?.toDouble() ?? 0.0;
       }
 
-      final chickPrice = (batchRes['chick_price'] as num?)?.toDouble() ?? 0.0;
-      if (chickPrice > 0 && _initialBirds > 0) {
-        sumExp += (chickPrice * _initialBirds);
+      // Mid-cycle batches are onboarded with initial_birds = birds ALIVE
+      // TODAY and the real pre-entry spend in opening_cost; their chick
+      // purchase never happened inside the app.
+      final openingCost = (batchRes['opening_cost'] as num?)?.toDouble() ?? 0.0;
+      final startAgeDays = (batchRes['start_age_days'] as num?)?.toInt() ?? 0;
+      final isMidCycle = openingCost > 0 || startAgeDays > 0;
+      if (!isMidCycle) {
+        final chickPrice = (batchRes['chick_price'] as num?)?.toDouble() ?? 0.0;
+        if (chickPrice > 0 && _initialBirds > 0) {
+          sumExp += (chickPrice * _initialBirds);
+        }
       }
+      sumExp += openingCost;
       _totalExpenses = sumExp;
 
       // 6. Admin Default Market Price
@@ -260,15 +276,19 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         .toLowerCase()
         .contains('egg');
 
-    final double netUnrecovered = (_totalExpenses - _totalSales).clamp(0.0, double.infinity);
+    // Unclamped: once sales exceed expenses the batch is already cash-positive
+    // and real profit must not be hidden. amountToRecover is the clamped view
+    // used for break-even maths only.
+    final double netUnrecovered = _totalExpenses - _totalSales;
+    final double amountToRecover = netUnrecovered > 0 ? netUnrecovered : 0.0;
 
     // Meat / Broiler Metrics
     final double totalLiveWeightKg = _currentBirds * _latestAvgWeightKg;
     final double breakEvenWeightKg = (_currentBirds > 0 && _negotiatingPrice > 0)
-        ? (netUnrecovered / (_currentBirds * _negotiatingPrice))
+        ? (amountToRecover / (_currentBirds * _negotiatingPrice))
         : 0.0;
     final double breakEvenPerKg = totalLiveWeightKg > 0
-        ? (netUnrecovered / totalLiveWeightKg)
+        ? (amountToRecover / totalLiveWeightKg)
         : 0.0;
     final double meatValuation = totalLiveWeightKg * _negotiatingPrice;
     final double meatRunningProfitLoss = meatValuation - netUnrecovered;

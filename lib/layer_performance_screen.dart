@@ -42,7 +42,7 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
 
       final data = await _supabase
           .from('batches')
-          .select('id, name, start_date, production_type, production_category, breed, status, initial_birds')
+          .select('id, name, start_date, production_type, production_category, breed, status, initial_birds, additional_birds')
           .eq('user_id', user.id)
           .order('start_date', ascending: false);
 
@@ -126,13 +126,14 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
   int _calculateActiveBirds() {
     if (_selectedBatch == null) return 0;
     final initial = _getInt(_selectedBatch!['initial_birds'] ?? _selectedBatch!['total_birds'] ?? 1000);
+    final added = _getInt(_selectedBatch!['additional_birds']);
     int totalMortality = 0;
     int totalCulling = 0;
     for (final log in _dailyLogs) {
       totalMortality += _getInt(log['mortality_count']);
       totalCulling += _getInt(log['culling_count']);
     }
-    final remaining = initial - totalMortality - totalCulling;
+    final remaining = initial + added - totalMortality - totalCulling;
     return remaining > 0 ? remaining : 0;
   }
 
