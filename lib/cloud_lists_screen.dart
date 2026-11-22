@@ -231,7 +231,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Delete daily record?'),
         content: Text(
-          '${batchName('${r['batch_id']}')} • ${_cloudDate(_dateOf(r))} • $session\nএই daily record মুছে ফেলবেন?',
+          '${batchName('${r['batch_id']}')} • ${_cloudDate(_dateOf(r))} • $session\nDelete this daily record?',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -244,7 +244,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
       await cloud.deleteDailyRecord('${r['id']}');
       return true;
     } catch (e) {
-      _snack('Daily record delete হয়নি: $e', isError: true);
+      _snack('Could not delete daily record: $e', isError: true);
       return false;
     }
   }
@@ -282,7 +282,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
           : error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text(error!)))
               : records.isEmpty
-                  ? const Center(child: Text('কোনো Supabase daily record নেই'))
+                  ? const Center(child: Text('No daily records yet'))
                   : _buildBody(context),
     );
   }
@@ -309,7 +309,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
         _summaryBar(context, list),
         Expanded(
           child: list.isEmpty
-              ? const Center(child: Text('এই filter-এ কোনো record নেই'))
+              ? const Center(child: Text('No records match this filter'))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
                   itemCount: items.length,
@@ -326,7 +326,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
 
   Widget _filterBar(BuildContext context) {
     final rangeText = range == null
-        ? 'সব তারিখ'
+        ? 'All dates'
         : '${_cloudDate(range!.start)} – ${_cloudDate(range!.end)}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -341,7 +341,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
               border: OutlineInputBorder(),
             ),
             items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('সব batch')),
+              const DropdownMenuItem<String?>(value: null, child: Text('All batches')),
               ...batches.map((b) => DropdownMenuItem<String?>(value: b.id, child: Text(b.name))),
             ],
             onChanged: (v) => setState(() => selectedBatchId = v),
@@ -358,7 +358,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
               ),
               if (range != null)
                 IconButton(
-                  tooltip: 'তারিখ filter মুছুন',
+                  tooltip: 'Clear date filter',
                   onPressed: () => setState(() => range = null),
                   icon: const Icon(Icons.close),
                 ),
@@ -403,7 +403,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
         children: [
           Expanded(
             child: Text(
-              '${_cloudDate(h.day)}  •  ${h.count}টি',
+              '${_cloudDate(h.day)}  •  ${h.count} ${h.count == 1 ? 'record' : 'records'}',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
@@ -496,12 +496,12 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
                       if (water > 0) _chip(context, Icons.water_drop_outlined, '${_fmt(water)} L'),
                       if (eggs > 0)
                         _chip(context, Icons.egg_outlined,
-                            damaged > 0 ? '${eggs.round()} (ভাঙা ${damaged.round()})' : '${eggs.round()}'),
+                            damaged > 0 ? '${eggs.round()} (${damaged.round()} damaged)' : '${eggs.round()}'),
                       if (avgW > 0) _chip(context, Icons.scale_outlined, '${avgW.toStringAsFixed(2)} kg'),
                       if (medCost > 0) _chip(context, Icons.medication_outlined, '$_taka${_fmt(medCost.round())}'),
                       if (vacCost > 0) _chip(context, Icons.vaccines_outlined, '$_taka${_fmt(vacCost.round())}'),
                       if (dead > 0)
-                        _chip(context, Icons.warning_amber_rounded, 'মৃত ${dead.round()}',
+                        _chip(context, Icons.warning_amber_rounded, 'Dead ${dead.round()}',
                             color: colors.error),
                       if (total > 0)
                         _chip(context, Icons.payments_outlined, '$_taka${_fmt(total.round())}',
