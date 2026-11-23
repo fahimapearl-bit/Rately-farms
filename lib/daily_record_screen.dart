@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_colors.dart';
 import 'average_weight_screen.dart';
+import 'feed_charts.dart';
 import 'layer_performance_screen.dart';
 import 'market_price_screen.dart';
 
@@ -52,7 +53,11 @@ extension RecordSessionX on RecordSession {
 ///  * **Eggs are edited here.** The Layer Performance screen is opened only to
 ///    read HDP / trend analysis, so eggs are never counted twice.
 class DailyRecordPageNew extends StatefulWidget {
-  const DailyRecordPageNew({super.key, this.initialBatchId, this.initialRecordId});
+  const DailyRecordPageNew({
+    super.key,
+    this.initialBatchId,
+    this.initialRecordId,
+  });
 
   /// Optional: open directly on a specific batch.
   final String? initialBatchId;
@@ -357,7 +362,8 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
       _schemaWarning = null;
     } catch (_) {
       _schemaReady = false;
-      _schemaWarning = 'Cost/session columns are missing in Supabase. Run supabase_daily_cost_migration.sql first.';
+      _schemaWarning =
+          'Cost/session columns are missing in Supabase. Run supabase_daily_cost_migration.sql first.';
     }
     try {
       await _supabase.from('daily_records').select('feed_type').limit(1);
@@ -1252,12 +1258,100 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
         const SizedBox(height: 14),
         _remarksField(),
         const SizedBox(height: 22),
+        _feedTypeChartSection(context.colors),
+        const SizedBox(height: 14),
         _history(colors),
       ],
     );
   }
 
   // ----------------------------------------------------------- fragments ---
+
+  /// Age of the flock on [day] — Day 1 = start_date, plus the mid-cycle
+  /// start_age_days offset. Same formula as [batchAgeDays].
+  int _ageDaysOnRecord(DateTime day) {
+    final raw = _selectedBatch?['start_date'];
+    if (raw == null) return 0;
+    final start = DateTime.tryParse(raw.toString());
+    if (start == null) return 0;
+    final s = DateTime(start.year, start.month, start.day);
+    final d = DateTime(day.year, day.month, day.day);
+    final diff = d.difference(s).inDays + 1 + _startAgeDays;
+    return diff < 0 ? 0 : diff;
+  }
+
+  /// Bird age (days) vs daily feed (kg), one line per feed type.
+  Widget _feedTypeChartSection(AppColors colors) {
+    final byType = <String, List<AgeFeedPoint>>{};
+    for (final r in _records) {
+      final raw = DateTime.tryParse('${r['record_date']}');
+      final kg = _num(r['feed_kg']);
+      if (raw == null || kg <= 0) continue;
+      final type = (r['feed_type'] ?? '').toString().trim();
+      byType
+          .putIfAbsent(type.isEmpty ? 'Not set' : type, () => [])
+          .add(AgeFeedPoint(_ageDaysOnRecord(raw), kg));
+    }
+    for (final list in byType.values) {
+      list.sort((a, b) => a.ageDays.compareTo(b.ageDays));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.soft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.insights, size: 16, color: colors.info),
+              const SizedBox(width: 6),
+              Text(
+                'Feed by bird age & feed type',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: colors.ink,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (byType.isEmpty)
+            Text(
+              'No feed entries yet. Pick a feed type (Starter / Grower / '
+              'Finisher or your own) when saving feed and the age-vs-feed '
+              'chart appears here.',
+              style: TextStyle(fontSize: 11, color: colors.muted),
+            )
+          else ...[
+            FeedTypeLineChart(
+              series: byType,
+              palette: [
+                colors.info,
+                colors.brand,
+                colors.warning,
+                colors.purple,
+                colors.error,
+                colors.accent,
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'X-axis is bird age in days (Day 1 = placement date). '
+              'Each line is one feed type.',
+              style: TextStyle(fontSize: 11, color: colors.muted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _header(AppColors colors) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1691,7 +1785,10 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
             helperText: _feedTypeReady
                 ? null
                 : 'feed_type column নেই — Supabase-এ column যোগ না করলে এটা save হবে না',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 12,
+            ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
@@ -1701,12 +1798,14 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
             spacing: 8,
             runSpacing: 4,
             children: options
-                .map((t) => ChoiceChip(
-                      label: Text(t),
-                      selected: current == t,
-                      visualDensity: VisualDensity.compact,
-                      onSelected: (_) => setState(() => _feedTypeCtrl.text = t),
-                    ))
+                .map(
+                  (t) => ChoiceChip(
+                    label: Text(t),
+                    selected: current == t,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _feedTypeCtrl.text = t),
+                  ),
+                )
                 .toList(),
           ),
         ),

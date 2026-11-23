@@ -9,6 +9,7 @@ import 'add_batch_screen.dart';
 import 'app_colors.dart';
 import 'average_weight_screen.dart';
 import 'daily_record_screen.dart';
+import 'feed_charts.dart';
 import 'sales_screen.dart' show WeightPoint, InterpWeight, interpolateWeight;
 
 class ExpenseScreenNew extends StatefulWidget {
@@ -46,7 +47,6 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     }
   }
 
-
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _batches = [];
@@ -75,11 +75,13 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
   DateTime? _date(dynamic value) => DateTime.tryParse('$value');
 
-  List<Map<String, dynamic>> get _activeBatches =>
-      _batches.where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() != 'closed').toList();
+  List<Map<String, dynamic>> get _activeBatches => _batches
+      .where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() != 'closed')
+      .toList();
 
-  List<Map<String, dynamic>> get _closedBatches =>
-      _batches.where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed').toList();
+  List<Map<String, dynamic>> get _closedBatches => _batches
+      .where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed')
+      .toList();
 
   Map<String, dynamic>? get _selectedActive {
     for (final batch in _activeBatches) {
@@ -106,11 +108,31 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       final user = _client.auth.currentUser;
       if (user == null) throw Exception('User not logged in');
       final results = await Future.wait([
-        _client.from('batches').select('*').eq('user_id', user.id).order('start_date', ascending: false),
-        _client.from('daily_records').select('*').eq('user_id', user.id).order('record_date', ascending: false),
-        _client.from('sales').select('*').eq('user_id', user.id).order('sale_date', ascending: false),
-        _client.from('expenses').select('*').eq('user_id', user.id).order('expense_date', ascending: false),
-        _client.from('weekly_weights').select('*').eq('user_id', user.id).order('weight_date', ascending: false),
+        _client
+            .from('batches')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('start_date', ascending: false),
+        _client
+            .from('daily_records')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('record_date', ascending: false),
+        _client
+            .from('sales')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('sale_date', ascending: false),
+        _client
+            .from('expenses')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('expense_date', ascending: false),
+        _client
+            .from('weekly_weights')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('weight_date', ascending: false),
       ]);
       List<Map<String, dynamic>> additions = [];
       var additionsLoaded = false;
@@ -135,26 +157,36 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       }
       if (!mounted) return;
       final batches = List<Map<String, dynamic>>.from(results[0] as List);
-      final active = batches.where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() != 'closed').toList();
-      final closed = batches.where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed').toList();
+      final active = batches
+          .where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() != 'closed')
+          .toList();
+      final closed = batches
+          .where((b) => '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed')
+          .toList();
 
       setState(() {
         _batches = batches;
         _records = List<Map<String, dynamic>>.from(results[1] as List);
         // Edited sales keep their old row with is_reversed = true: skip those.
-        _sales = List<Map<String, dynamic>>.from(results[2] as List)
-            .where((s) => s['is_reversed'] != true)
-            .toList();
+        _sales = List<Map<String, dynamic>>.from(
+          results[2] as List,
+        ).where((s) => s['is_reversed'] != true).toList();
         _birdAdditions = additions;
         _additionsLoaded = additionsLoaded;
         _adjustments = List<Map<String, dynamic>>.from(results[3] as List);
         _weights = List<Map<String, dynamic>>.from(results[4] as List);
 
-        if (_selectedActiveBatchId == null || !active.any((b) => '${b['id']}' == _selectedActiveBatchId)) {
-          _selectedActiveBatchId = active.isNotEmpty ? '${active.first['id']}' : null;
+        if (_selectedActiveBatchId == null ||
+            !active.any((b) => '${b['id']}' == _selectedActiveBatchId)) {
+          _selectedActiveBatchId = active.isNotEmpty
+              ? '${active.first['id']}'
+              : null;
         }
-        if (_selectedClosedBatchId == null || !closed.any((b) => '${b['id']}' == _selectedClosedBatchId)) {
-          _selectedClosedBatchId = closed.isNotEmpty ? '${closed.first['id']}' : null;
+        if (_selectedClosedBatchId == null ||
+            !closed.any((b) => '${b['id']}' == _selectedClosedBatchId)) {
+          _selectedClosedBatchId = closed.isNotEmpty
+              ? '${closed.first['id']}'
+              : null;
         }
         _loading = false;
       });
@@ -167,8 +199,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     }
   }
 
-  List<Map<String, dynamic>> _forBatch(String batchId, List<Map<String, dynamic>> source) =>
-      source.where((row) => '${row['batch_id']}' == batchId).toList();
+  List<Map<String, dynamic>> _forBatch(
+    String batchId,
+    List<Map<String, dynamic>> source,
+  ) => source.where((row) => '${row['batch_id']}' == batchId).toList();
 
   double _recordCost(Map<String, dynamic> r) {
     final stored = r['total_cost'];
@@ -231,13 +265,20 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
   /// Layer batches log deaths and culls in layer_daily_logs, not in
   /// daily_records; broiler batches keep the daily_records path.
-  int _mortalityOf(String batchId, bool isLayer, List<Map<String, dynamic>> records) {
+  int _mortalityOf(
+    String batchId,
+    bool isLayer,
+    List<Map<String, dynamic>> records,
+  ) {
     if (!isLayer) {
       return records.fold<int>(0, (sum, r) => sum + _i(r['mortality']));
     }
     return _layerLogs
         .where((l) => '${l['batch_id']}' == batchId)
-        .fold<int>(0, (sum, l) => sum + _i(l['mortality_count']) + _i(l['culling_count']));
+        .fold<int>(
+          0,
+          (sum, l) => sum + _i(l['mortality_count']) + _i(l['culling_count']),
+        );
   }
 
   /// Records are ordered record_date DESC, so the newest NON-BLANK price is
@@ -299,31 +340,174 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         .toList();
   }
 
-  List<_SeriesPoint> _fcrSeries(List<Map<String, dynamic>> records) {
-    final dated = records
-        .map((record) {
-          final date = _date(record['record_date']);
-          return date == null ? null : (date: date, record: record);
-        })
-        .whereType<({DateTime date, Map<String, dynamic> record})>()
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+  // ---------------------------------------------------------------- FCR ---
+  // FCR = total feed consumed (kg) ÷ total live-weight gain (kg).
+  //
+  // The previous implementation divided ONE day's feed_kg by the weight
+  // difference to the previous record. That produced a wrong, noisy
+  // "daily FCR": all the feed given on days without a weight sample was
+  // left out of the numerator, so the ratio was far too low, and every
+  // sampling gap produced a fresh misleading spike. The corrected series
+  // below is CUMULATIVE: every day's feed_kg (plus the mid-cycle opening
+  // feed balance, which belongs to the same flock) goes into the
+  // numerator and the denominator is the total weight gain measured so
+  // far. Feed COST and bird counts never enter the formula.
+  List<_SeriesPoint> _fcrSeries(
+    List<Map<String, dynamic>> records, [
+    double openingFeedKg = 0,
+  ]) {
+    final dated =
+        records
+            .map((record) {
+              final date = _date(record['record_date']);
+              return date == null ? null : (date: date, record: record);
+            })
+            .whereType<({DateTime date, Map<String, dynamic> record})>()
+            .toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
 
     final points = <_SeriesPoint>[];
-    double? previousWeight;
+    var cumulativeFeed = openingFeedKg;
+    double? baselineWeight; // running max, so dips never erase real gain
     for (final item in dated) {
-      final feed = _n(item.record['feed_kg']);
+      cumulativeFeed += _n(item.record['feed_kg']);
       final weight = _n(item.record['avg_weight_kg']);
-      final priorWeight = previousWeight;
-      if (weight > 0 && priorWeight != null) {
-        final gain = weight - priorWeight;
-        if (gain > 0 && feed > 0) {
-          points.add(_SeriesPoint(item.date, feed / gain));
+      if (weight > 0) {
+        if (baselineWeight != null &&
+            weight > baselineWeight &&
+            cumulativeFeed > 0) {
+          points.add(
+            _SeriesPoint(item.date, cumulativeFeed / (weight - baselineWeight)),
+          );
+        }
+        if (baselineWeight == null || weight > baselineWeight) {
+          baselineWeight = weight;
         }
       }
-      if (weight > 0) previousWeight = weight;
     }
     return points;
+  }
+
+  /// Age of the flock on [day], same formula as the daily-record screen
+  /// (Day 1 = start_date, plus the mid-cycle start_age_days offset).
+  int _ageDaysOn(Map<String, dynamic>? batch, DateTime day) {
+    if (batch == null) return 0;
+    final start = _date(batch['start_date']);
+    if (start == null) return 0;
+    final s = DateTime(start.year, start.month, start.day);
+    final d = DateTime(day.year, day.month, day.day);
+    return math.max(
+      0,
+      d.difference(s).inDays + 1 + _i(batch['start_age_days']),
+    );
+  }
+
+  String _feedTypeOf(Map<String, dynamic> record) {
+    final raw = '${record['feed_type'] ?? ''}'.trim();
+    return raw.isEmpty ? 'Not set' : _titleCase(raw);
+  }
+
+  /// Daily feed (kg) grouped by feed type, x-axis = bird age in days.
+  Map<String, List<AgeFeedPoint>> _feedByTypeSeries(
+    Map<String, dynamic>? batch,
+    List<Map<String, dynamic>> records,
+  ) {
+    final byType = <String, List<AgeFeedPoint>>{};
+    for (final r in records) {
+      final date = _date(r['record_date']);
+      final kg = _n(r['feed_kg']);
+      if (date == null || kg <= 0) continue;
+      byType
+          .putIfAbsent(_feedTypeOf(r), () => [])
+          .add(AgeFeedPoint(_ageDaysOn(batch, date), kg));
+    }
+    for (final list in byType.values) {
+      list.sort((a, b) => a.ageDays.compareTo(b.ageDays));
+    }
+    return byType;
+  }
+
+  /// FCR per feed type.
+  ///
+  /// Feed eaten between two weight samples is what produced the gain
+  /// measured at the later sample, so each window's feed is split
+  /// pro-rata among the types used in that window and credited with the
+  /// window's gain. FCR(type) = Σ feed(type in windows) ÷ Σ gain
+  /// attributed to that type. Feed given before the FIRST weight sample
+  /// is excluded (its gain is unmeasurable), which keeps the ratio
+  /// honest instead of inflating it.
+  _FcrByType _fcrByFeedType(List<Map<String, dynamic>> records) {
+    final dated =
+        records
+            .map((r) {
+              final d = _date(r['record_date']);
+              return d == null ? null : (date: d, record: r);
+            })
+            .whereType<({DateTime date, Map<String, dynamic> record})>()
+            .toList()
+          ..sort((a, b) => a.date.compareTo(b.date));
+
+    // yyyy-MM-dd -> feed type -> kg fed that day.
+    final feedByDayType = <String, Map<String, double>>{};
+    for (final item in dated) {
+      final kg = _n(item.record['feed_kg']);
+      if (kg <= 0) continue;
+      final day = DateFormat('yyyy-MM-dd').format(item.date);
+      final types = feedByDayType.putIfAbsent(day, () => {});
+      final t = _feedTypeOf(item.record);
+      types[t] = (types[t] ?? 0) + kg;
+    }
+
+    final feedInWindows = <String, double>{};
+    final gainByType = <String, double>{};
+    double? baselineWeight;
+    String? fromDay;
+
+    void creditGain(double gain, Map<String, double> windowFeed) {
+      final total = windowFeed.values.fold<double>(0, (a, b) => a + b);
+      windowFeed.forEach((t, kg) {
+        feedInWindows[t] = (feedInWindows[t] ?? 0) + kg;
+        gainByType[t] = (gainByType[t] ?? 0) + gain * kg / total;
+      });
+    }
+
+    for (final item in dated) {
+      final weight = _n(item.record['avg_weight_kg']);
+      final day = DateFormat('yyyy-MM-dd').format(item.date);
+      if (weight <= 0) continue;
+      if (baselineWeight != null && weight > baselineWeight) {
+        final windowFeed = <String, double>{};
+        feedByDayType.forEach((d2, types) {
+          if (fromDay != null &&
+              d2.compareTo(fromDay!) > 0 &&
+              d2.compareTo(day) <= 0) {
+            types.forEach((t, kg) => windowFeed[t] = (windowFeed[t] ?? 0) + kg);
+          }
+        });
+        if (windowFeed.isNotEmpty)
+          creditGain(weight - baselineWeight, windowFeed);
+      }
+      // Monotone baseline: weight dips (sampling noise, sold birds) never
+      // manufacture negative gain, and re-gain is not double counted.
+      if (baselineWeight == null || weight > baselineWeight)
+        baselineWeight = weight;
+      fromDay ??= day;
+      fromDay = day;
+    }
+
+    final fcr = <String, double>{};
+    feedInWindows.forEach((t, kg) {
+      final gain = gainByType[t] ?? 0;
+      if (kg > 0 && gain > 0) fcr[t] = kg / gain;
+    });
+    final totalFeed = feedInWindows.values.fold<double>(0, (a, b) => a + b);
+    final totalGain = gainByType.values.fold<double>(0, (a, b) => a + b);
+    return _FcrByType(
+      fcr: fcr,
+      feed: feedInWindows,
+      totalFeed: totalFeed,
+      totalGain: totalGain,
+    );
   }
 
   String _batchType(Map<String, dynamic> b) {
@@ -357,7 +541,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       child: Scaffold(
         backgroundColor: colors.soft,
         appBar: AppBar(
-          title: const Text('Cost & Revenue', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Cost & Revenue',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           actions: [
             IconButton(
               onPressed: _load,
@@ -370,7 +557,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             indicatorWeight: 3,
             labelColor: colors.ink,
             unselectedLabelColor: colors.muted,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            labelStyle: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
             tabs: [
               Tab(
                 icon: const Icon(Icons.autorenew, size: 20),
@@ -386,73 +576,75 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? _errorView(colors)
-                : _batches.isEmpty
-                    ? const Center(child: Text('No batch found'))
-                    : TabBarView(
-                        children: [
-                          RefreshIndicator(
-                            onRefresh: _load,
-                            child: _activeBatchesView(colors),
-                          ),
-                          RefreshIndicator(
-                            onRefresh: _load,
-                            child: _closedBatchesView(colors),
-                          ),
-                        ],
-                      ),
+            ? _errorView(colors)
+            : _batches.isEmpty
+            ? const Center(child: Text('No batch found'))
+            : TabBarView(
+                children: [
+                  RefreshIndicator(
+                    onRefresh: _load,
+                    child: _activeBatchesView(colors),
+                  ),
+                  RefreshIndicator(
+                    onRefresh: _load,
+                    child: _closedBatchesView(colors),
+                  ),
+                ],
+              ),
       ),
     );
   }
 
   Widget _errorView(AppColors colors) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, color: colors.error, size: 44),
-              const SizedBox(height: 10),
-              Text('Failed to load report: $_error', textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: colors.error, size: 44),
+          const SizedBox(height: 10),
+          Text('Failed to load report: $_error', textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
-  Widget _emptyState(AppColors colors, {required String title, required String subtitle, required IconData icon, Widget? action}) =>
-      Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 54, color: colors.muted),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: TextStyle(fontSize: 12, color: colors.muted),
-                textAlign: TextAlign.center,
-              ),
-              if (action != null) ...[
-                const SizedBox(height: 16),
-                action,
-              ],
-            ],
+  Widget _emptyState(
+    AppColors colors, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    Widget? action,
+  }) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 54, color: colors.muted),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
           ),
-        ),
-      );
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 12, color: colors.muted),
+            textAlign: TextAlign.center,
+          ),
+          if (action != null) ...[const SizedBox(height: 16), action],
+        ],
+      ),
+    ),
+  );
 
   // ==========================================
   // 1. ACTIVE BATCHES VIEW
@@ -462,7 +654,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       return _emptyState(
         colors,
         title: 'No active batch',
-        subtitle: 'Tap the button below to start a new batch, or go to "Add Batch" from the Home dashboard.',
+        subtitle:
+            'Tap the button below to start a new batch, or go to "Add Batch" from the Home dashboard.',
         icon: Icons.inventory_2_outlined,
         action: ElevatedButton.icon(
           onPressed: () async {
@@ -478,7 +671,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             backgroundColor: colors.brand,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         ),
       );
@@ -498,13 +693,24 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final openingCost = _openingCost(batch);
     final chickCost = _chickCost(batch);
     final dailyCost = records.fold<double>(0, (sum, r) => sum + _recordCost(r));
-    final adjustmentCost = adjustments.fold<double>(0, (sum, e) => sum + _n(e['amount']));
+    final adjustmentCost = adjustments.fold<double>(
+      0,
+      (sum, e) => sum + _n(e['amount']),
+    );
     final totalRunningCost =
         chickCost + openingCost + dailyCost + adjustmentCost;
 
-    final mortality = _mortalityOf(batchId, _batchType(batch) == 'Layer', records);
-    final birdsSold = sales.where((s) => s['sale_type'] == 'Bird').fold<int>(0, (sum, s) => sum + _i(s['quantity']));
-    final remainingLiveBirds = math.max(0, initialBirds - mortality - birdsSold).toInt();
+    final mortality = _mortalityOf(
+      batchId,
+      _batchType(batch) == 'Layer',
+      records,
+    );
+    final birdsSold = sales
+        .where((s) => s['sale_type'] == 'Bird')
+        .fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final remainingLiveBirds = math
+        .max(0, initialBirds - mortality - birdsSold)
+        .toInt();
     final costPerLiveBird = remainingLiveBirds > 0
         ? totalRunningCost / remainingLiveBirds
         : (initialBirds > 0 ? totalRunningCost / initialBirds : 0.0);
@@ -513,23 +719,38 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final latestWeight = wNow?.kg ?? 0.0;
     final weightEstimated = wNow?.isEstimated ?? false;
     final totalLiveWeightKg = remainingLiveBirds * latestWeight;
-    final costPerKg = totalLiveWeightKg > 0 ? totalRunningCost / totalLiveWeightKg : 0.0;
+    final costPerKg = totalLiveWeightKg > 0
+        ? totalRunningCost / totalLiveWeightKg
+        : 0.0;
     final marketPrice = _latestNonZeroPrice(records, 'market_price_per_kg');
     final estimatedLiveValuation = totalLiveWeightKg * marketPrice;
 
     final isLayer = _batchType(batch) == 'Layer';
-    final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
-    final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final eggsCollected = records.fold<int>(
+      0,
+      (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']),
+    );
+    final eggsSold = sales
+        .where(_isGoodEggSale)
+        .fold<int>(0, (sum, s) => sum + _i(s['quantity']));
     final currentEggStock = math.max(0, eggsCollected - eggsSold).toInt();
     final eggPrice = _latestNonZeroPrice(records, 'egg_price_per_piece');
     final eggValuation = currentEggStock * eggPrice;
 
-    final partialRevenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
+    final partialRevenue = sales.fold<double>(
+      0,
+      (sum, s) => sum + _saleAmount(s),
+    );
 
     final feedSeries = _series(records, (record) => _n(record['feed_kg']));
     final dailyCostSeries = _series(records, _recordCost);
-    final eggSeries = _series(records, (record) => _n(record['eggs_good'] ?? record['eggs_collected']));
-    final fcrSeries = _fcrSeries(records);
+    final eggSeries = _series(
+      records,
+      (record) => _n(record['eggs_good'] ?? record['eggs_collected']),
+    );
+    final fcrSeries = _fcrSeries(records, _n(batch['opening_feed_kg']));
+    final fcrByType = _fcrByFeedType(records);
+    final feedByType = _feedByTypeSeries(batch, records);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
@@ -559,7 +780,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           latestWeight: latestWeight,
           weightEstimated: weightEstimated,
           costPerKg: costPerKg,
-          estimatedValuation: isLayer ? estimatedLiveValuation + eggValuation : estimatedLiveValuation,
+          estimatedValuation: isLayer
+              ? estimatedLiveValuation + eggValuation
+              : estimatedLiveValuation,
           marketPrice: marketPrice,
           partialRevenue: partialRevenue,
           isLayer: isLayer,
@@ -569,18 +792,42 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         const SizedBox(height: 18),
 
         // Cost Breakdown (Donut Chart & Details)
-        _sectionTitle('Cost Breakdown', Icons.pie_chart_outline, colors.warning),
+        _sectionTitle(
+          'Cost Breakdown',
+          Icons.pie_chart_outline,
+          colors.warning,
+        ),
         const SizedBox(height: 8),
-        _costSummary(colors, chickCost, openingCost, dailyCost, totalRunningCost, records, adjustments),
+        _costSummary(
+          colors,
+          chickCost,
+          openingCost,
+          dailyCost,
+          totalRunningCost,
+          records,
+          adjustments,
+        ),
         const SizedBox(height: 18),
 
         // Time Series (Feed & Daily Cost)
         _timeSeriesSection(colors, feedSeries, dailyCostSeries, batchId),
         const SizedBox(height: 18),
 
+        // Feed by bird age & feed type
+        _feedTypeChartSection(colors, feedByType),
+        const SizedBox(height: 18),
+
         // Production Analysis (Broiler FCR or Layer Eggs)
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records,
-            batchId, _n(batch['opening_feed_kg'])),
+        _productionAnalysisSection(
+          colors,
+          isLayer,
+          eggSeries,
+          fcrSeries,
+          records,
+          batchId,
+          _n(batch['opening_feed_kg']),
+          fcrByType,
+        ),
 
         if (partialRevenue > 0) ...[
           const SizedBox(height: 18),
@@ -591,9 +838,15 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
         if (_activeBatches.length > 1) ...[
           const SizedBox(height: 18),
-          _sectionTitle('Other Active Batches', Icons.dashboard_outlined, colors.info),
+          _sectionTitle(
+            'Other Active Batches',
+            Icons.dashboard_outlined,
+            colors.info,
+          ),
           const SizedBox(height: 8),
-          _batchesQuickList(colors, _activeBatches, _selectedActiveBatchId, (id) {
+          _batchesQuickList(colors, _activeBatches, _selectedActiveBatchId, (
+            id,
+          ) {
             setState(() => _selectedActiveBatchId = id);
           }),
         ],
@@ -609,7 +862,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       return _emptyState(
         colors,
         title: 'No closed batch',
-        subtitle: 'Once the batch is fully sold, set its status to Closed to see the final accounts here.',
+        subtitle:
+            'Once the batch is fully sold, set its status to Closed to see the final accounts here.',
         icon: Icons.check_circle_outline,
       );
     }
@@ -628,19 +882,46 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final openingCost = _openingCost(batch);
     final chickCost = _chickCost(batch);
     final dailyCost = records.fold<double>(0, (sum, r) => sum + _recordCost(r));
-    final adjustmentCost = adjustments.fold<double>(0, (sum, e) => sum + _n(e['amount']));
+    final adjustmentCost = adjustments.fold<double>(
+      0,
+      (sum, e) => sum + _n(e['amount']),
+    );
     final totalCost = chickCost + openingCost + dailyCost + adjustmentCost;
 
-    final totalRevenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
-    final birdRevenue = sales.where((s) => s['sale_type'] == 'Bird').fold<double>(0, (sum, s) => sum + _saleAmount(s));
-    final eggRevenue = sales.where((s) => '${s['sale_type']}'.contains('Egg')).fold<double>(0, (sum, s) => sum + _saleAmount(s));
-    final litterRevenue = sales.where((s) => s['sale_type'] == 'Litter').fold<double>(0, (sum, s) => sum + _saleAmount(s));
-    final birdsSold = sales.where((s) => s['sale_type'] == 'Bird').fold<int>(0, (sum, s) => sum + _i(s['quantity']));
-    final soldWeight = sales.where((s) => s['sale_type'] == 'Bird').fold<double>(0, (sum, s) => sum + _n(s['weight_kg']));
-    final eggsCollected = records.fold<int>(0, (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']));
-    final eggsSold = sales.where(_isGoodEggSale).fold<int>(0, (sum, s) => sum + _i(s['quantity']));
-    final mortality = _mortalityOf(batchId, _batchType(batch) == 'Layer', records);
-    final remainingBirds = math.max(0, initialBirds - mortality - birdsSold).toInt();
+    final totalRevenue = sales.fold<double>(
+      0,
+      (sum, s) => sum + _saleAmount(s),
+    );
+    final birdRevenue = sales
+        .where((s) => s['sale_type'] == 'Bird')
+        .fold<double>(0, (sum, s) => sum + _saleAmount(s));
+    final eggRevenue = sales
+        .where((s) => '${s['sale_type']}'.contains('Egg'))
+        .fold<double>(0, (sum, s) => sum + _saleAmount(s));
+    final litterRevenue = sales
+        .where((s) => s['sale_type'] == 'Litter')
+        .fold<double>(0, (sum, s) => sum + _saleAmount(s));
+    final birdsSold = sales
+        .where((s) => s['sale_type'] == 'Bird')
+        .fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final soldWeight = sales
+        .where((s) => s['sale_type'] == 'Bird')
+        .fold<double>(0, (sum, s) => sum + _n(s['weight_kg']));
+    final eggsCollected = records.fold<int>(
+      0,
+      (sum, r) => sum + _i(r['eggs_good'] ?? r['eggs_collected']),
+    );
+    final eggsSold = sales
+        .where(_isGoodEggSale)
+        .fold<int>(0, (sum, s) => sum + _i(s['quantity']));
+    final mortality = _mortalityOf(
+      batchId,
+      _batchType(batch) == 'Layer',
+      records,
+    );
+    final remainingBirds = math
+        .max(0, initialBirds - mortality - birdsSold)
+        .toInt();
     final wNow = _weightAt(weights, records);
     final latestWeight = wNow?.kg ?? 0.0;
     final marketPrice = _latestNonZeroPrice(records, 'market_price_per_kg');
@@ -654,8 +935,13 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
     final feedSeries = _series(records, (record) => _n(record['feed_kg']));
     final dailyCostSeries = _series(records, _recordCost);
-    final eggSeries = _series(records, (record) => _n(record['eggs_good'] ?? record['eggs_collected']));
-    final fcrSeries = _fcrSeries(records);
+    final eggSeries = _series(
+      records,
+      (record) => _n(record['eggs_good'] ?? record['eggs_collected']),
+    );
+    final fcrSeries = _fcrSeries(records, _n(batch['opening_feed_kg']));
+    final fcrByType = _fcrByFeedType(records);
+    final feedByType = _feedByTypeSeries(batch, records);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
@@ -684,12 +970,28 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         ),
         const SizedBox(height: 18),
 
-        _sectionTitle('Final Cost Summary', Icons.receipt_long_outlined, colors.warning),
+        _sectionTitle(
+          'Final Cost Summary',
+          Icons.receipt_long_outlined,
+          colors.warning,
+        ),
         const SizedBox(height: 8),
-        _costSummary(colors, chickCost, openingCost, dailyCost, totalCost, records, adjustments),
+        _costSummary(
+          colors,
+          chickCost,
+          openingCost,
+          dailyCost,
+          totalCost,
+          records,
+          adjustments,
+        ),
         const SizedBox(height: 18),
 
-        _sectionTitle('Revenue Summary', Icons.point_of_sale_outlined, colors.brand),
+        _sectionTitle(
+          'Revenue Summary',
+          Icons.point_of_sale_outlined,
+          colors.brand,
+        ),
         const SizedBox(height: 8),
         _revenueSummary(
           colors,
@@ -713,8 +1015,19 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         _timeSeriesSection(colors, feedSeries, dailyCostSeries, null),
         const SizedBox(height: 18),
 
-        _productionAnalysisSection(colors, isLayer, eggSeries, fcrSeries, records,
-            null, _n(batch['opening_feed_kg'])),
+        _feedTypeChartSection(colors, feedByType),
+        const SizedBox(height: 18),
+
+        _productionAnalysisSection(
+          colors,
+          isLayer,
+          eggSeries,
+          fcrSeries,
+          records,
+          null,
+          _n(batch['opening_feed_kg']),
+          fcrByType,
+        ),
         const SizedBox(height: 18),
 
         _sectionTitle('All Closed Batches History', Icons.history, colors.info),
@@ -775,7 +1088,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     color: colors.warning.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(Icons.account_balance_wallet, color: colors.warning, size: 20),
+                  child: Icon(
+                    Icons.account_balance_wallet,
+                    color: colors.warning,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -798,7 +1115,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: colors.info.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
@@ -894,8 +1214,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 Expanded(
                   child: _activeMetricPill(
                     title: 'Cost per kg',
-                    value: latestWeight > 0 ? '৳${_money.format(costPerKg)}' : '—',
-                    subtitle: latestWeight > 0 ? 'Weight ${_money.format(latestWeight)}kg${weightEstimated ? ' (est.)' : ''}' : 'Enter weight ➔',
+                    value: latestWeight > 0
+                        ? '৳${_money.format(costPerKg)}'
+                        : '—',
+                    subtitle: latestWeight > 0
+                        ? 'Weight ${_money.format(latestWeight)}kg${weightEstimated ? ' (est.)' : ''}'
+                        : 'Enter weight ➔',
                     color: colors.accent,
                     icon: Icons.scale,
                     onTap: () => _navigateToWeight(batchId),
@@ -946,9 +1270,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             backgroundColor: colors.brand,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
@@ -961,9 +1293,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colors.accent,
                             side: BorderSide(color: colors.accent),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
@@ -995,7 +1335,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             children: [
                               Text(
                                 'Estimated Market Value (Live Valuation): ',
-                                style: TextStyle(fontSize: 11, color: colors.muted),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colors.muted,
+                                ),
                               ),
                               Text(
                                 '৳${_money.format(estimatedValuation)}',
@@ -1067,7 +1410,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     children: [
                       Text(
                         'Batch Performance (Closed)',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.ink),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: colors.ink,
+                        ),
                       ),
                       Text(
                         '${batch['name'] ?? 'Unnamed'} · Final Settlement',
@@ -1077,14 +1424,21 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: colors.muted.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     'Closed',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colors.muted),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: colors.muted,
+                    ),
                   ),
                 ),
               ],
@@ -1129,7 +1483,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text('ROI / Margin', style: TextStyle(fontSize: 11, color: colors.muted)),
+                      Text(
+                        'ROI / Margin',
+                        style: TextStyle(fontSize: 11, color: colors.muted),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         '${roi.toStringAsFixed(1)}%',
@@ -1220,7 +1577,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 ),
               ),
               if (onTap != null)
-                Icon(Icons.arrow_forward_ios, size: 9, color: color.withOpacity(0.7)),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 9,
+                  color: color.withOpacity(0.7),
+                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -1239,10 +1600,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 9.5,
-              color: context.colors.muted,
-            ),
+            style: TextStyle(fontSize: 9.5, color: context.colors.muted),
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -1259,168 +1617,198 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     return pill;
   }
 
-  Widget _partialSalesCard(AppColors colors, double partialRevenue, int birdsSold) => Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _partialSalesCard(
+    AppColors colors,
+    double partialRevenue,
+    int birdsSold,
+  ) => Card(
+    elevation: 0,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Total Sales (billed)',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colors.brand),
-                  ),
-                  Text(
-                    '৳${_money.format(partialRevenue)}',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: colors.brand),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
               Text(
-                'This revenue is already included from $birdsSold birds sold from this active batch.',
-                style: TextStyle(fontSize: 11, color: colors.muted),
+                'Total Sales (billed)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: colors.brand,
+                ),
+              ),
+              Text(
+                '৳${_money.format(partialRevenue)}',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: colors.brand,
+                ),
               ),
             ],
           ),
-        ),
-      );
+          const SizedBox(height: 6),
+          Text(
+            'This revenue is already included from $birdsSold birds sold from this active batch.',
+            style: TextStyle(fontSize: 11, color: colors.muted),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _batchPicker({
     required AppColors colors,
     required List<Map<String, dynamic>> batches,
     required String? selectedId,
     required ValueChanged<String?> onChanged,
-  }) =>
-      Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: DropdownButtonFormField<String>(
-            value: selectedId,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Select batch',
-              prefixIcon: Icon(Icons.inventory_2_outlined),
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            items: batches
-                .map((b) => DropdownMenuItem(
-                      value: '${b['id']}',
-                      child: Text(_batchLabel(b), overflow: TextOverflow.ellipsis),
-                    ))
-                .toList(),
-            onChanged: onChanged,
-          ),
+  }) => Card(
+    elevation: 0,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: DropdownButtonFormField<String>(
+        value: selectedId,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Select batch',
+          prefixIcon: Icon(Icons.inventory_2_outlined),
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
-      );
+        items: batches
+            .map(
+              (b) => DropdownMenuItem(
+                value: '${b['id']}',
+                child: Text(_batchLabel(b), overflow: TextOverflow.ellipsis),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+      ),
+    ),
+  );
 
   Widget _batchesQuickList(
     AppColors colors,
     List<Map<String, dynamic>> batches,
     String? selectedId,
     ValueChanged<String> onSelect,
-  ) =>
-      Card(
-        elevation: 0,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            children: batches.map((b) {
-              final id = '${b['id']}';
-              final records = _records.where((r) => '${r['batch_id']}' == id);
-              final sales = _sales.where((s) => '${s['batch_id']}' == id);
-              final cost = _chickCost(b) +
-                  _openingCost(b) +
-                  records.fold<double>(0, (sum, r) => sum + _recordCost(r)) +
-                  _adjustments.where((e) => '${e['batch_id']}' == id).fold<double>(0, (sum, e) => sum + _n(e['amount']));
-              final revenue = sales.fold<double>(0, (sum, s) => sum + _saleAmount(s));
-              final closed = '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed';
-              final result = revenue - cost;
-              final color = result >= 0 ? colors.brand : colors.error;
-              final isSelected = id == selectedId;
+  ) => Card(
+    elevation: 0,
+    child: Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        children: batches.map((b) {
+          final id = '${b['id']}';
+          final records = _records.where((r) => '${r['batch_id']}' == id);
+          final sales = _sales.where((s) => '${s['batch_id']}' == id);
+          final cost =
+              _chickCost(b) +
+              _openingCost(b) +
+              records.fold<double>(0, (sum, r) => sum + _recordCost(r)) +
+              _adjustments
+                  .where((e) => '${e['batch_id']}' == id)
+                  .fold<double>(0, (sum, e) => sum + _n(e['amount']));
+          final revenue = sales.fold<double>(
+            0,
+            (sum, s) => sum + _saleAmount(s),
+          );
+          final closed = '${b['status'] ?? 'Active'}'.toLowerCase() == 'closed';
+          final result = revenue - cost;
+          final color = result >= 0 ? colors.brand : colors.error;
+          final isSelected = id == selectedId;
 
-              return InkWell(
-                onTap: () => onSelect(id),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? colors.info.withOpacity(0.08) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
+          return InkWell(
+            onTap: () => onSelect(id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? colors.info.withOpacity(0.08)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 17,
+                    backgroundColor: (closed ? colors.muted : colors.info)
+                        .withOpacity(.14),
+                    child: Icon(
+                      closed ? Icons.lock_outline : Icons.autorenew,
+                      size: 17,
+                      color: closed ? colors.muted : colors.info,
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 17,
-                        backgroundColor: (closed ? colors.muted : colors.info).withOpacity(.14),
-                        child: Icon(
-                          closed ? Icons.lock_outline : Icons.autorenew,
-                          size: 17,
-                          color: closed ? colors.muted : colors.info,
-                        ),
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${b['name'] ?? 'Unnamed'}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: isSelected ? colors.brand : colors.ink,
-                              ),
-                            ),
-                            Text(
-                              '${_batchType(b)} · Day ${_age(b)} · ${closed ? 'Closed' : 'Active'}',
-                              style: TextStyle(fontSize: 11, color: colors.muted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('৳${_money.format(cost)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                          Text(
-                            closed
-                                ? '${result >= 0 ? 'Profit' : 'Loss'} ৳${_money.format(result.abs())}'
-                                : 'Revenue ৳${_money.format(revenue)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: closed ? color : colors.brand,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${b['name'] ?? 'Unnamed'}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: isSelected ? colors.brand : colors.ink,
                           ),
-                        ],
+                        ),
+                        Text(
+                          '${_batchType(b)} · Day ${_age(b)} · ${closed ? 'Closed' : 'Active'}',
+                          style: TextStyle(fontSize: 11, color: colors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '৳${_money.format(cost)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        closed
+                            ? '${result >= 0 ? 'Profit' : 'Loss'} ৳${_money.format(result.abs())}'
+                            : 'Revenue ৳${_money.format(revenue)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: closed ? color : colors.brand,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      );
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    ),
+  );
 
   Widget _sectionTitle(String title, IconData icon, Color color) => Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: color.withOpacity(.12),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 18, color: color),
-          ),
-          const SizedBox(width: 9),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        ],
-      );
+    children: [
+      Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: color.withOpacity(.12),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(icon, size: 18, color: color),
+      ),
+      const SizedBox(width: 9),
+      Text(
+        title,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    ],
+  );
   Widget _costSummary(
     AppColors colors,
     double chickCost,
@@ -1446,8 +1834,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       categories['Medicine'] = categories['Medicine']! + _n(r['medicine_cost']);
       categories['Vaccine'] = categories['Vaccine']! + _n(r['vaccine_cost']);
       categories['Labour'] = categories['Labour']! + _n(r['labour_cost']);
-      categories['Electricity'] = categories['Electricity']! + _n(r['electricity_cost']);
-      categories['Transport'] = categories['Transport']! + _n(r['transport_cost']);
+      categories['Electricity'] =
+          categories['Electricity']! + _n(r['electricity_cost']);
+      categories['Transport'] =
+          categories['Transport']! + _n(r['transport_cost']);
       categories['Other'] = categories['Other']! + _n(r['others_cost']);
     }
     // Manual expense rows keep their stored `expense_type` instead of every
@@ -1463,10 +1853,12 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final head = visible.take(6).toList();
     final tail = visible.skip(6).toList();
     if (tail.isNotEmpty) {
-      head.add(MapEntry(
-        'Other (${tail.length} more)',
-        tail.fold<double>(0, (sum, e) => sum + e.value),
-      ));
+      head.add(
+        MapEntry(
+          'Other (${tail.length} more)',
+          tail.fold<double>(0, (sum, e) => sum + e.value),
+        ),
+      );
     }
     return Card(
       elevation: 0,
@@ -1474,15 +1866,25 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         padding: const EdgeInsets.all(14),
         child: Column(
           children: [
-            _bigMetric('Total Batch Cost', '৳${_money.format(total)}', colors.warning),
+            _bigMetric(
+              'Total Batch Cost',
+              '৳${_money.format(total)}',
+              colors.warning,
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _miniMetric('Opening balance', opening, colors.purple)),
+                Expanded(
+                  child: _miniMetric('Opening balance', opening, colors.purple),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _miniMetric('Chick purchase', chickCost, colors.info)),
+                Expanded(
+                  child: _miniMetric('Chick purchase', chickCost, colors.info),
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _miniMetric('Daily records', daily, colors.warning)),
+                Expanded(
+                  child: _miniMetric('Daily records', daily, colors.warning),
+                ),
               ],
             ),
             const SizedBox(height: 14),
@@ -1512,8 +1914,14 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                       children: head
                           .asMap()
                           .entries
-                          .map((e) =>
-                              _legend(e.value.key, e.value.value, colors, e.key))
+                          .map(
+                            (e) => _legend(
+                              e.value.key,
+                              e.value.value,
+                              colors,
+                              e.key,
+                            ),
+                          )
                           .toList(),
                     ),
                   ),
@@ -1614,15 +2022,82 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           backgroundColor: colors.warning,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],
                   ],
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Card: bird age (days) vs daily feed (kg), one line per feed type.
+  Widget _feedTypeChartSection(
+    AppColors colors,
+    Map<String, List<AgeFeedPoint>> feedByType,
+  ) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.insights, color: colors.info, size: 20),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Feed by bird age & feed type',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Text(
+                  'kg · per day',
+                  style: TextStyle(fontSize: 11, color: colors.muted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (feedByType.isEmpty)
+              _analysisNote(
+                'No feed entries with a feed type yet. Pick Starter / Grower / Finisher '
+                '(or a custom type) when saving daily feed and the age-vs-feed chart appears here.',
+                colors,
+              )
+            else ...[
+              FeedTypeLineChart(
+                series: feedByType,
+                palette: [
+                  colors.info,
+                  colors.brand,
+                  colors.warning,
+                  colors.purple,
+                  colors.error,
+                  colors.accent,
+                ],
+              ),
+              _analysisNote(
+                'X-axis is bird age in days (Day 1 = start date). '
+                'Each line is one feed type; peaks show which phase ate the most.',
+                colors,
+              ),
+            ],
           ],
         ),
       ),
@@ -1637,6 +2112,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     List<Map<String, dynamic>> records,
     String? batchId, [
     double openingFeedKg = 0,
+    _FcrByType fcrByType = const _FcrByType.empty(),
   ]) {
     if (isLayer) {
       final totalEggs = eggs.fold<double>(0, (sum, point) => sum + point.value);
@@ -1661,7 +2137,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
-                  Text('Good eggs / day', style: TextStyle(fontSize: 11, color: colors.muted)),
+                  Text(
+                    'Good eggs / day',
+                    style: TextStyle(fontSize: 11, color: colors.muted),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1669,14 +2148,30 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 children: [
                   Expanded(
                     child: eggs.isEmpty
-                        ? _miniTextMetric('Total good eggs', 'Not available', colors.warning)
-                        : _miniMetric('Total good eggs', totalEggs, colors.warning),
+                        ? _miniTextMetric(
+                            'Total good eggs',
+                            'Not available',
+                            colors.warning,
+                          )
+                        : _miniMetric(
+                            'Total good eggs',
+                            totalEggs,
+                            colors.warning,
+                          ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: eggs.isEmpty
-                        ? _miniTextMetric('Average / record', 'Not available', colors.brand)
-                        : _miniMetric('Average / record', averageEggs, colors.brand),
+                        ? _miniTextMetric(
+                            'Average / record',
+                            'Not available',
+                            colors.brand,
+                          )
+                        : _miniMetric(
+                            'Average / record',
+                            averageEggs,
+                            colors.brand,
+                          ),
                   ),
                 ],
               ),
@@ -1715,7 +2210,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             const SizedBox(height: 2),
                             Text(
                               'Add egg collection entries from Daily Records.',
-                              style: TextStyle(fontSize: 11, color: colors.muted),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colors.muted,
+                              ),
                             ),
                           ],
                         ),
@@ -1730,9 +2228,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             backgroundColor: colors.warning,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ],
@@ -1745,7 +2251,10 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   colors,
                 )
               else
-                _analysisNote('Trend based on $eggDaysLabel of egg records.', colors),
+                _analysisNote(
+                  'Trend based on $eggDaysLabel of egg records.',
+                  colors,
+                ),
             ],
           ),
         ),
@@ -1754,10 +2263,8 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
 
     // Include feed carried over from before a mid-cycle batch was onboarded,
     // otherwise FCR ignores the flock's whole early life.
-    final totalFeed = records.fold<double>(
-          0,
-          (sum, record) => sum + _n(record['feed_kg']),
-        ) +
+    final totalFeed =
+        records.fold<double>(0, (sum, record) => sum + _n(record['feed_kg'])) +
         openingFeedKg;
     final averageFcr = fcr.isEmpty
         ? 0.0
@@ -1779,24 +2286,44 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-                Text('FCR · kg/kg', style: TextStyle(fontSize: 11, color: colors.muted)),
+                Text(
+                  'FCR · kg/kg',
+                  style: TextStyle(fontSize: 11, color: colors.muted),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _miniMetric('Total feed', totalFeed, colors.info)),
+                Expanded(
+                  child: _miniMetric('Total feed', totalFeed, colors.info),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: fcr.isEmpty
-                      ? _miniTextMetric('Average FCR', 'Not available', colors.purple)
-                      : _miniMetric('Average FCR', averageFcr, colors.purple),
+                  child: (fcrByType.totalFeed > 0 && fcrByType.totalGain > 0)
+                      ? _miniTextMetric(
+                          'Overall FCR (kg feed / kg gain)',
+                          (fcrByType.totalFeed / fcrByType.totalGain)
+                              .toStringAsFixed(2),
+                          colors.purple,
+                        )
+                      : fcr.isEmpty
+                      ? _miniTextMetric(
+                          'Average FCR',
+                          'Not available',
+                          colors.purple,
+                        )
+                      : _miniTextMetric(
+                          'Average FCR',
+                          averageFcr.toStringAsFixed(2),
+                          colors.purple,
+                        ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             _TimeSeriesChart(
-              title: 'Daily feed conversion ratio',
+              title: 'Feed conversion ratio (cumulative)',
               unit: 'kg feed / kg gain',
               points: fcr,
               color: colors.info,
@@ -1804,9 +2331,45 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             _analysisNote(
               fcr.isEmpty
                   ? 'At least two dated average-weight records are needed for the FCR chart.'
-                  : 'FCR = feed kg of that day ÷ weight gain kg from the previous weight sample. Lower FCR is better.',
+                  : 'FCR = total feed eaten so far ÷ total weight gain so far. Lower is better; broiler target ≈ 1.5–1.8.',
               colors,
             ),
+            if (fcrByType.fcr.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(Icons.category_outlined, size: 14, color: colors.info),
+                  const SizedBox(width: 6),
+                  Text(
+                    'FCR by feed type',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 190,
+                width: double.infinity,
+                child: FcrByTypeBarChart(
+                  fcrByType: fcrByType.fcr,
+                  barColor: colors.info,
+                  labelColor: colors.muted,
+                ),
+              ),
+              _analysisNote(
+                'Feed of each type ÷ weight gain while that type was fed. '
+                'A high bar means that feed phase converted poorly.',
+                colors,
+              ),
+            ] else if (!isLayer)
+              _analysisNote(
+                'Tag daily feed entries with a feed type (Starter / Grower / Finisher) '
+                'to compare FCR between feed phases.',
+                colors,
+              ),
             if (fcr.isEmpty && batchId != null)
               Container(
                 margin: const EdgeInsets.only(top: 10),
@@ -1821,7 +2384,11 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.analytics_outlined, color: colors.accent, size: 20),
+                        Icon(
+                          Icons.analytics_outlined,
+                          color: colors.accent,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'Add data entries to get FCR and conversion efficiency',
@@ -1849,9 +2416,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                             backgroundColor: colors.accent,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1862,9 +2437,17 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colors.brand,
                             side: BorderSide(color: colors.brand),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ],
@@ -1879,63 +2462,283 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   }
 
   Widget _analysisNote(String message, AppColors colors) => Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(message, style: TextStyle(fontSize: 11, color: colors.muted)),
-      );
+    padding: const EdgeInsets.only(top: 8),
+    child: Text(message, style: TextStyle(fontSize: 11, color: colors.muted)),
+  );
 
   Widget _miniTextMetric(String label, String value, Color color) => Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(.06),
-          borderRadius: BorderRadius.circular(10),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(.06),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: context.colors.muted),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 3),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _revenueSummary(
+    AppColors colors,
+    bool isLayer,
+    double total,
+    double bird,
+    double egg,
+    double litter,
+    int birdsSold,
+    double soldWeight,
+    int eggsCollected,
+    int eggsSold,
+    int remaining,
+    double latestWeight,
+    double liveValue,
+    int eggStock,
+    double eggValue,
+  ) => Card(
+    elevation: 0,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _bigMetric('Total Revenue', '৳${_money.format(total)}', colors.brand),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 160,
+            child: _BarChart(
+              items: {'Bird sales': bird, 'Egg sales': egg, 'Litter': litter},
+              color: colors.brand,
+              muted: colors.muted,
+            ),
+          ),
+          const Divider(height: 20),
+          _metricRow(
+            'Bird sales · $birdsSold birds · ${_money.format(soldWeight)} kg',
+            bird,
+            colors,
+          ),
+          _metricRow('Egg sales', egg, colors),
+          _metricRow('Litter sales', litter, colors),
+          if (isLayer) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Live stock & egg stock',
+              style: TextStyle(fontWeight: FontWeight.bold, color: colors.ink),
+            ),
+            _metricRow(
+              '$remaining birds × ${latestWeight.toStringAsFixed(2)} kg · estimated live value',
+              liveValue,
+              colors,
+            ),
+            _metricRow(
+              '$eggStock eggs · collected $eggsCollected / sold $eggsSold · estimated value',
+              eggValue,
+              colors,
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+
+  Widget _analytics(
+    AppColors colors,
+    bool isLayer,
+    bool isClosed,
+    double cost,
+    double revenue,
+    double realized,
+    double position,
+    int initial,
+    int sold,
+  ) => Card(
+    elevation: 0,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _bigMetric(
+                  isClosed && !isLayer
+                      ? 'Realized P/L (cash)'
+                      : 'Realized Margin (cash)',
+                  '৳${_money.format(realized)}',
+                  realized >= 0 ? colors.brand : colors.error,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _bigMetric(
+                  isLayer ? 'Estimated Position' : 'Recovery',
+                  isLayer
+                      ? '৳${_money.format(position)}'
+                      : '${cost <= 0 ? 0 : (revenue / cost * 100).toStringAsFixed(1)}%',
+                  isLayer
+                      ? (position >= 0 ? colors.brand : colors.error)
+                      : colors.info,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 150,
+            child: _BarChart(
+              items: {
+                'Cost': cost,
+                'Revenue': revenue,
+                if (isLayer) 'Live stock': position - revenue + cost,
+              },
+              color: colors.brand,
+              muted: colors.warning,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _metricRow(
+            'Cost per initial bird',
+            initial == 0 ? 0 : cost / initial,
+            colors,
+          ),
+          _metricRow('Birds sold', sold.toDouble(), colors, suffix: ' birds'),
+          Text(
+            isLayer
+                ? 'Layer batch: live stock and egg stock values are estimates.'
+                : (isClosed
+                      ? 'Closed meat batch: revenue minus total cost is the actual result.'
+                      : 'Meat batch: close the batch after all birds are sold to finalize actual profit/loss.'),
+            style: TextStyle(fontSize: 11, color: colors.muted),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _bigMetric(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withOpacity(.08),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: color.withOpacity(.18)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: color,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _miniMetric(String label, double value, Color color) => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(.06),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: colorsFor(context).muted),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '৳${_money.format(value)}',
+          style: TextStyle(fontWeight: FontWeight.bold, color: color),
+        ),
+      ],
+    ),
+  );
+
+  Widget _metricRow(
+    String label,
+    double value,
+    AppColors colors, {
+    String suffix = '',
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 12))),
+        Text(
+          '৳${_money.format(value)}$suffix',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
+
+  Widget _legend(String label, double value, AppColors colors, int index) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
           children: [
-            Text(label, style: TextStyle(fontSize: 11, color: context.colors.muted)),
-            const SizedBox(height: 3),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+            Container(
+              width: 9,
+              height: 9,
+              decoration: BoxDecoration(
+                color: [
+                  colors.purple,
+                  colors.brand,
+                  colors.error,
+                  colors.warning,
+                  colors.info,
+                  colors.accent,
+                ][index % 6],
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 10),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              '৳${_money.format(value)}',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
             ),
           ],
         ),
       );
-
-  Widget _revenueSummary(AppColors colors, bool isLayer, double total, double bird, double egg, double litter, int birdsSold, double soldWeight, int eggsCollected, int eggsSold, int remaining, double latestWeight, double liveValue, int eggStock, double eggValue) => Card(elevation: 0, child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    _bigMetric('Total Revenue', '৳${_money.format(total)}', colors.brand),
-    const SizedBox(height: 12),
-    SizedBox(height: 160, child: _BarChart(items: {'Bird sales': bird, 'Egg sales': egg, 'Litter': litter}, color: colors.brand, muted: colors.muted)),
-    const Divider(height: 20),
-    _metricRow('Bird sales · $birdsSold birds · ${_money.format(soldWeight)} kg', bird, colors),
-    _metricRow('Egg sales', egg, colors),
-    _metricRow('Litter sales', litter, colors),
-    if (isLayer) ...[
-      const SizedBox(height: 10),
-      Text('Live stock & egg stock', style: TextStyle(fontWeight: FontWeight.bold, color: colors.ink)),
-      _metricRow('$remaining birds × ${latestWeight.toStringAsFixed(2)} kg · estimated live value', liveValue, colors),
-      _metricRow('$eggStock eggs · collected $eggsCollected / sold $eggsSold · estimated value', eggValue, colors),
-    ],
-  ])));
-
-  Widget _analytics(AppColors colors, bool isLayer, bool isClosed, double cost, double revenue, double realized, double position, int initial, int sold) => Card(elevation: 0, child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
-    Row(children: [Expanded(child: _bigMetric(isClosed && !isLayer ? 'Realized P/L (cash)' : 'Realized Margin (cash)', '৳${_money.format(realized)}', realized >= 0 ? colors.brand : colors.error)), const SizedBox(width: 10), Expanded(child: _bigMetric(isLayer ? 'Estimated Position' : 'Recovery', isLayer ? '৳${_money.format(position)}' : '${cost <= 0 ? 0 : (revenue / cost * 100).toStringAsFixed(1)}%', isLayer ? (position >= 0 ? colors.brand : colors.error) : colors.info))]),
-    const SizedBox(height: 16),
-    SizedBox(height: 150, child: _BarChart(items: {'Cost': cost, 'Revenue': revenue, if (isLayer) 'Live stock': position - revenue + cost}, color: colors.brand, muted: colors.warning)),
-    const SizedBox(height: 8),
-    _metricRow('Cost per initial bird', initial == 0 ? 0 : cost / initial, colors),
-    _metricRow('Birds sold', sold.toDouble(), colors, suffix: ' birds'),
-    Text(isLayer ? 'Layer batch: live stock and egg stock values are estimates.' : (isClosed ? 'Closed meat batch: revenue minus total cost is the actual result.' : 'Meat batch: close the batch after all birds are sold to finalize actual profit/loss.'), style: TextStyle(fontSize: 11, color: colors.muted)),
-  ])));
-
-  Widget _bigMetric(String label, String value, Color color) => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(.18))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)), const SizedBox(height: 4), FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)))]));
-
-  Widget _miniMetric(String label, double value, Color color) => Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(.06), borderRadius: BorderRadius.circular(10)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(fontSize: 11, color: colorsFor(context).muted)), const SizedBox(height: 3), Text('৳${_money.format(value)}', style: TextStyle(fontWeight: FontWeight.bold, color: color))]));
-
-  Widget _metricRow(String label, double value, AppColors colors, {String suffix = ''}) => Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: [Expanded(child: Text(label, style: const TextStyle(fontSize: 12))), Text('৳${_money.format(value)}$suffix', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))]));
-
-  Widget _legend(String label, double value, AppColors colors, int index) => Padding(padding: const EdgeInsets.symmetric(vertical: 2), child: Row(children: [Container(width: 9, height: 9, decoration: BoxDecoration(color: [colors.purple, colors.brand, colors.error, colors.warning, colors.info, colors.accent][index % 6], shape: BoxShape.circle)), const SizedBox(width: 5), Expanded(child: Text(label, style: const TextStyle(fontSize: 10), overflow: TextOverflow.ellipsis)), Text('৳${_money.format(value)}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600))]));
 }
 
 AppColors colorsFor(BuildContext context) => context.colors;
@@ -1945,6 +2748,28 @@ class _SeriesPoint {
   final double value;
 
   const _SeriesPoint(this.date, this.value);
+}
+
+/// Result of [_fcrByFeedType]: per-feed-type FCR plus the feed and
+/// gain totals behind the overall (windowed) FCR.
+class _FcrByType {
+  final Map<String, double> fcr;
+  final Map<String, double> feed;
+  final double totalFeed;
+  final double totalGain;
+
+  const _FcrByType({
+    required this.fcr,
+    required this.feed,
+    required this.totalFeed,
+    required this.totalGain,
+  });
+
+  const _FcrByType.empty()
+    : fcr = const {},
+      feed = const {},
+      totalFeed = 0,
+      totalGain = 0;
 }
 
 class _TimeSeriesChart extends StatelessWidget {
@@ -1974,7 +2799,10 @@ class _TimeSeriesChart extends StatelessWidget {
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 6),
-            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
             const Spacer(),
             Text(unit, style: TextStyle(fontSize: 11, color: colors.muted)),
           ],
@@ -2028,8 +2856,16 @@ class _TimeSeriesPainter extends CustomPainter {
     const right = 10.0;
     const top = 8.0;
     const bottom = 28.0;
-    final chart = Rect.fromLTRB(left, top, size.width - right, size.height - bottom);
-    final maxValue = points.fold<double>(0, (max, point) => math.max(max, point.value).toDouble());
+    final chart = Rect.fromLTRB(
+      left,
+      top,
+      size.width - right,
+      size.height - bottom,
+    );
+    final maxValue = points.fold<double>(
+      0,
+      (max, point) => math.max(max, point.value).toDouble(),
+    );
     final scaleMax = maxValue <= 0 ? 1.0 : maxValue * 1.15;
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
 
@@ -2041,7 +2877,9 @@ class _TimeSeriesPainter extends CustomPainter {
       canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
       final value = scaleMax * (3 - row) / 3;
       textPainter.text = TextSpan(
-        text: value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0),
+        text: value >= 1000
+            ? '${(value / 1000).toStringAsFixed(1)}k'
+            : value.toStringAsFixed(0),
         style: TextStyle(fontSize: 9, color: labelColor),
       );
       textPainter.layout(maxWidth: left - 5);
@@ -2095,7 +2933,10 @@ class _DonutChart extends StatelessWidget {
   final List<Color> colors;
   const _DonutChart({required this.values, required this.colors});
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _DonutPainter(values, colors), child: const Center(child: Icon(Icons.pie_chart_outline, size: 24)));
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _DonutPainter(values, colors),
+    child: const Center(child: Icon(Icons.pie_chart_outline, size: 24)),
+  );
 }
 
 class _DonutPainter extends CustomPainter {
@@ -2111,10 +2952,20 @@ class _DonutPainter extends CustomPainter {
     var start = -math.pi / 2;
     for (var i = 0; i < values.length; i++) {
       final sweep = values[i] / total * math.pi * 2;
-      canvas.drawArc(Rect.fromCircle(center: center, radius: radius), start, sweep, false, Paint()..color = colors[i % colors.length]..style = PaintingStyle.stroke..strokeWidth = 25);
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        sweep,
+        false,
+        Paint()
+          ..color = colors[i % colors.length]
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 25,
+      );
       start += sweep;
     }
   }
+
   @override
   bool shouldRepaint(covariant _DonutPainter old) => old.values != values;
 }
@@ -2123,9 +2974,16 @@ class _BarChart extends StatelessWidget {
   final Map<String, double> items;
   final Color color;
   final Color muted;
-  const _BarChart({required this.items, required this.color, required this.muted});
+  const _BarChart({
+    required this.items,
+    required this.color,
+    required this.muted,
+  });
   @override
-  Widget build(BuildContext context) => CustomPaint(painter: _BarPainter(items, color, muted), child: const SizedBox.expand());
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _BarPainter(items, color, muted),
+    child: const SizedBox.expand(),
+  );
 }
 
 class _BarPainter extends CustomPainter {
@@ -2136,7 +2994,10 @@ class _BarPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final values = items.values.toList();
-    final maxValue = values.fold<double>(0, (a, b) => math.max(a, b).toDouble());
+    final maxValue = values.fold<double>(
+      0,
+      (a, b) => math.max(a, b).toDouble(),
+    );
     if (maxValue <= 0) return;
     final barWidth = size.width / (items.length * 2 + 1);
     var index = 0;
@@ -2145,13 +3006,23 @@ class _BarPainter extends CustomPainter {
       final x = barWidth * (index * 2 + 1);
       final h = (entry.value / maxValue) * (size.height - 38);
       final rect = Rect.fromLTWH(x, size.height - 24 - h, barWidth, h);
-      canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(6)), Paint()..color = entry.value > 0 ? color.withOpacity(.75) : muted.withOpacity(.25));
-      textPainter.text = TextSpan(text: entry.key, style: TextStyle(fontSize: 10, color: muted));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(6)),
+        Paint()
+          ..color = entry.value > 0
+              ? color.withOpacity(.75)
+              : muted.withOpacity(.25),
+      );
+      textPainter.text = TextSpan(
+        text: entry.key,
+        style: TextStyle(fontSize: 10, color: muted),
+      );
       textPainter.layout(maxWidth: barWidth + 28);
       textPainter.paint(canvas, Offset(x - 10, size.height - 20));
       index++;
     }
   }
+
   @override
   bool shouldRepaint(covariant _BarPainter old) => old.items != items;
 }
