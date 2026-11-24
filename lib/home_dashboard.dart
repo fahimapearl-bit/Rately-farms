@@ -76,10 +76,10 @@ class HomeDashboardPage extends StatelessWidget {
             // Farm Welcome Header Card
             Card(
               elevation: 0,
-              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.35),
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.35),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -87,7 +87,7 @@ class HomeDashboardPage extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.18),
+                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
                       child: Icon(Icons.agriculture, color: Theme.of(context).colorScheme.primary, size: 24),
                     ),
                     const SizedBox(width: 12),
@@ -142,7 +142,7 @@ class HomeDashboardPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: colors.accent.withOpacity(0.25),
+                      color: colors.accent.withValues(alpha: 0.25),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -153,7 +153,7 @@ class HomeDashboardPage extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: colors.onAccent.withOpacity(0.18),
+                        color: colors.onAccent.withValues(alpha: 0.18),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(Icons.psychology, color: colors.card, size: 28),
@@ -337,7 +337,7 @@ class HomeDashboardPage extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(icon, size: 16, color: color),
@@ -381,9 +381,9 @@ class HomeDashboardPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Ink(
           decoration: BoxDecoration(
-            color: item.color.withOpacity(0.06),
+            color: item.color.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: item.color.withOpacity(0.22), width: 1.2),
+            border: Border.all(color: item.color.withValues(alpha: 0.22), width: 1.2),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           child: Column(
@@ -391,7 +391,7 @@ class HomeDashboardPage extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: item.color.withOpacity(0.18),
+                backgroundColor: item.color.withValues(alpha: 0.18),
                 child: Icon(item.icon, color: item.color, size: 21),
               ),
               const SizedBox(height: 8),

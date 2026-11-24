@@ -90,7 +90,7 @@ class _CloudBatchListScreenState extends State<CloudBatchListScreen> {
                   ? const Center(child: Text('কোনো Supabase batch নেই'))
                   : _TableFrame(
                       child: DataTable(
-                        headingRowColor: MaterialStatePropertyAll(colors.brandSoft),
+                        headingRowColor: WidgetStatePropertyAll(colors.brandSoft),
                         columns: const [
                           DataColumn(label: Text('Batch')),
                           DataColumn(label: Text('Category')),
@@ -333,7 +333,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
       child: Column(
         children: [
           DropdownButtonFormField<String?>(
-            value: selectedBatchId,
+            initialValue: selectedBatchId,
             isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Batch',
@@ -527,7 +527,7 @@ class _CloudDailyRecordsScreenState extends State<CloudDailyRecordsScreen> {
     final c = color ?? Theme.of(context).colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: c.withOpacity(0.10), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(8)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

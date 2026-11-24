@@ -389,7 +389,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(12),
                         itemCount: filteredBatches.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final batch = filteredBatches[index];
                           final isActive = (batch['status'] ?? 'Active') == 'Active';

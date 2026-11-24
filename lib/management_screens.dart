@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'local_store.dart';
 import 'supabase_repository.dart';
 import 'models.dart';
 import 'supabase_error_handler.dart';
@@ -145,7 +144,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
                   padding: const EdgeInsets.all(12),
                   child: Column(children: [
                     DropdownButtonFormField<String>(
-                      value: batchId,
+                      initialValue: batchId,
                       decoration: const InputDecoration(labelText: 'Batch'),
                       items: batches
                           .map((b) => DropdownMenuItem(
@@ -156,7 +155,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
                       onChanged: (value) => setState(() => batchId = value),
                     ),
                     DropdownButtonFormField<String>(
-                      value: expenseType,
+                      initialValue: expenseType,
                       decoration: const InputDecoration(labelText: 'Expense type'),
                       items: const [
                         DropdownMenuItem(value: 'Feed', child: Text('Feed')),
@@ -225,7 +224,7 @@ class _ExpenseScreenV2State extends State<ExpenseScreenV2> {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
-                              headingRowColor: MaterialStatePropertyAll(
+                              headingRowColor: WidgetStatePropertyAll(
                                 colors.brandSoft,
                               ),
                               columns: const [
@@ -339,7 +338,7 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
                   padding: const EdgeInsets.all(12),
                   child: Column(children: [
                     DropdownButtonFormField<String>(
-                      value: batchId,
+                      initialValue: batchId,
                       decoration: const InputDecoration(labelText: 'Batch'),
                       items: batches
                           .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
@@ -391,7 +390,7 @@ class _WeeklyWeightScreenV2State extends State<WeeklyWeightScreenV2> {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
-                              headingRowColor: MaterialStatePropertyAll(
+                              headingRowColor: WidgetStatePropertyAll(
                                 colors.brandSoft,
                               ),
                               columns: const [
@@ -503,7 +502,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
             padding: const EdgeInsets.all(12),
             child: Column(children: [
               DropdownButtonFormField<String>(
-                value: type,
+                initialValue: type,
                 decoration: const InputDecoration(labelText: 'Price type'),
                 items: const [
                   DropdownMenuItem(value: 'Bird', child: Text('Bird price (per kg)')),
@@ -515,7 +514,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
                 }),
               ),
               DropdownButtonFormField<String>(
-                value: category,
+                initialValue: category,
                 decoration: const InputDecoration(labelText: 'Category'),
                 items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
                 onChanged: (value) => setState(() => category = value!),
@@ -564,7 +563,7 @@ class _MarketPriceScreenV2State extends State<MarketPriceScreenV2> {
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
-                        headingRowColor: MaterialStatePropertyAll(
+                        headingRowColor: WidgetStatePropertyAll(
                           colors.brandSoft,
                         ),
                         columns: const [

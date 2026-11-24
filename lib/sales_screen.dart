@@ -824,7 +824,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DropdownButtonFormField<String>(
-                    value: batchId,
+                    initialValue: batchId,
                     isExpanded: true,
                     decoration: _dec('Batch', icon: Icons.inventory_2),
                     items: batches
@@ -859,7 +859,7 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                   _stockCard(colors),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: typeValue,
+                    initialValue: typeValue,
                     isExpanded: true,
                     decoration: _dec('Sale type', icon: Icons.category),
                     items: allowed
@@ -955,10 +955,10 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
                             ),
                             decoration: _dec(
                               type == 'Hatching Eggs'
-                                  ? 'Price (tk/pc) \~35+'
+                                  ? 'Price (tk/pc) ~35+'
                                   : type == 'Damaged Eggs'
                                       ? 'Price (tk/pc)'
-                                      : 'Price (tk/pc) \~12',
+                                      : 'Price (tk/pc) ~12',
                               icon: Icons.payments,
                             ),
                             validator: (v) {

@@ -430,8 +430,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
   Map<String, dynamic> _firstActive(List<Map<String, dynamic>> list) {
     for (final b in list) {
-      if ((b['status'] ?? 'Active').toString().toLowerCase() == 'active')
+      if ((b['status'] ?? 'Active').toString().toLowerCase() == 'active') {
         return b;
+      }
     }
     return list.first;
   }
@@ -1394,7 +1395,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: colors.onAccent.withOpacity(0.18),
+                  color: colors.onAccent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -1485,7 +1486,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                       vertical: 10,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.onAccent.withOpacity(0.16),
+                      color: colors.onAccent.withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
@@ -1524,7 +1525,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.onAccent.withOpacity(0.14),
+        color: colors.onAccent.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -1648,7 +1649,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
               'Already booked today: '
               '${saved.map((r) {
                 final rs = RecordSessionX.fromDb(r['session']);
-                return '${rs.label} ${_currency}${_money0(_rowTotal(r))}';
+                return '${rs.label} $_currency${_money0(_rowTotal(r))}';
               }).join('  ·  ')}',
               style: TextStyle(fontSize: 11, color: colors.muted),
             ),
@@ -1705,7 +1706,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 16, color: color),
@@ -1721,7 +1722,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                   ),
                 ),
               ),
-              if (trailing != null) trailing,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 12),
@@ -1931,7 +1932,7 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(

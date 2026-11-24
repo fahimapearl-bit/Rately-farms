@@ -300,8 +300,9 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           : RefreshIndicator(
               color: colors.brand,
               onRefresh: () async {
-                if (_selectedBatch != null)
+                if (_selectedBatch != null) {
                   await _loadWeightHistory(_selectedBatch!['id']);
+                }
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -382,7 +383,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: colors.brand.withOpacity(0.1),
+                  color: colors.brand.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.scale, color: colors.brand, size: 18),
@@ -417,7 +418,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: _selectedBatch?['id'],
+            initialValue: _selectedBatch?['id'],
             isExpanded: true,
             decoration: InputDecoration(
               contentPadding: const EdgeInsets.symmetric(
@@ -529,7 +530,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
                     ? '${latestGrams.toStringAsFixed(0)} g'
                     : '--',
                 subtitle: hasWeight
-                    ? '(${latestKg!.toStringAsFixed(3)} kg)'
+                    ? '(${latestKg.toStringAsFixed(3)} kg)'
                     : 'No records yet',
                 icon: Icons.scale_rounded,
                 accentColor: colors.brand,
@@ -787,7 +788,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: colors.brand.withOpacity(0.1),
+                  color: colors.brand.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -886,7 +887,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: colors.brand.withOpacity(0.1),
+                  color: colors.brand.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
@@ -1113,7 +1114,7 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: colors.inkAlt.withOpacity(0.1),
+                  color: colors.inkAlt.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(Icons.history, color: colors.inkAlt, size: 16),
@@ -1408,7 +1409,7 @@ class WeightCurvePainter extends CustomPainter {
     // 1. Draw Target Line (Dotted / Dashed Blue)
     if (targetPoints.length >= 2) {
       final targetPaint = Paint()
-        ..color = colors.info.withOpacity(0.85)
+        ..color = colors.info.withValues(alpha: 0.85)
         ..strokeWidth = 2
         ..style = PaintingStyle.stroke;
 

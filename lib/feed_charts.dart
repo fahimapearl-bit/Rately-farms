@@ -56,7 +56,7 @@ class FeedTypeLineChart extends StatelessWidget {
                 drawVerticalLine: false,
                 horizontalInterval: _niceInterval(feedMax),
                 getDrawingHorizontalLine: (v) => FlLine(
-                  color: Colors.grey.withOpacity(0.25),
+                  color: Colors.grey.withValues(alpha: 0.25),
                   strokeWidth: 1,
                 ),
               ),
@@ -199,7 +199,7 @@ class FcrByTypeBarChart extends StatelessWidget {
           drawVerticalLine: false,
           horizontalInterval: yMax / 4,
           getDrawingHorizontalLine: (v) =>
-              FlLine(color: Colors.grey.withOpacity(0.25), strokeWidth: 1),
+              FlLine(color: Colors.grey.withValues(alpha: 0.25), strokeWidth: 1),
         ),
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(
@@ -275,7 +275,7 @@ class FcrByTypeBarChart extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(6),
                   ),
-                  color: barColor.withOpacity(0.85),
+                  color: barColor.withValues(alpha: 0.85),
                 ),
               ],
             ),

@@ -78,7 +78,7 @@ class AuthCardShell extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (header != null) header!,
+          ?header,
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
             child: child,

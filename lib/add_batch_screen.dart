@@ -114,8 +114,9 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
 
   String? _positiveInteger(String? value) {
     final number = int.tryParse(value?.trim() ?? '');
-    if (number == null || number <= 0)
+    if (number == null || number <= 0) {
       return 'Enter a valid count greater than 0';
+    }
     return null;
   }
 
@@ -156,8 +157,9 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     try {
       final client = Supabase.instance.client;
       final user = client.auth.currentUser;
-      if (user == null)
+      if (user == null) {
         throw Exception('User is not logged in. Please log in first.');
+      }
 
       // Keep the UI wording and database constraint consistent.
       final dbProductionType = productionType == 'Meat Production'
@@ -341,7 +343,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
               Text(
                 'New batch overview',
                 style: TextStyle(
-                  color: colors.onAccent.withOpacity(0.9),
+                  color: colors.onAccent.withValues(alpha: 0.9),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -365,7 +367,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           Text(
             '${productionType ?? 'Production'} • ${productionCategory ?? 'Category'}',
             style: TextStyle(
-              color: colors.onAccent.withOpacity(0.82),
+              color: colors.onAccent.withValues(alpha: 0.82),
               fontSize: 12,
             ),
           ),
@@ -394,9 +396,9 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: colors.onAccent.withOpacity(0.14),
+        color: colors.onAccent.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: colors.onAccent.withOpacity(0.18)),
+        border: Border.all(color: colors.onAccent.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -404,7 +406,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
           Text(
             label,
             style: TextStyle(
-              color: colors.onAccent.withOpacity(0.75),
+              color: colors.onAccent.withValues(alpha: 0.75),
               fontSize: 11,
             ),
           ),
@@ -509,7 +511,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: productionType,
+                            initialValue: productionType,
                             isExpanded: true,
                             decoration: _inputDecoration(
                               'Production type *',
@@ -540,7 +542,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value:
+                            initialValue:
                                 currentCategories.contains(productionCategory)
                                 ? productionCategory
                                 : null,
@@ -583,7 +585,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                     ],
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: breedList.contains(breed) ? breed : null,
+                      initialValue: breedList.contains(breed) ? breed : null,
                       isExpanded: true,
                       decoration: _inputDecoration(
                         'Breed / strain (optional)',
@@ -651,7 +653,7 @@ class _AddBatchPageNewState extends State<AddBatchPageNew> {
                       value: isMidCycle,
                       onChanged: (v) => setState(() => isMidCycle = v),
                       contentPadding: EdgeInsets.zero,
-                      activeColor: colors.brand,
+                      activeThumbColor: colors.brand,
                       title: const Text(
                         'Mid-cycle batch (already running)',
                         style: TextStyle(fontWeight: FontWeight.w600),

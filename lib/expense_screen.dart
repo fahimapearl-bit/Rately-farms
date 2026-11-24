@@ -479,18 +479,20 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
         final windowFeed = <String, double>{};
         feedByDayType.forEach((d2, types) {
           if (fromDay != null &&
-              d2.compareTo(fromDay!) > 0 &&
+              d2.compareTo(fromDay) > 0 &&
               d2.compareTo(day) <= 0) {
             types.forEach((t, kg) => windowFeed[t] = (windowFeed[t] ?? 0) + kg);
           }
         });
-        if (windowFeed.isNotEmpty)
+        if (windowFeed.isNotEmpty) {
           creditGain(weight - baselineWeight, windowFeed);
+        }
       }
       // Monotone baseline: weight dips (sampling noise, sold birds) never
       // manufacture negative gain, and re-gain is not double counted.
-      if (baselineWeight == null || weight > baselineWeight)
+      if (baselineWeight == null || weight > baselineWeight) {
         baselineWeight = weight;
+      }
       fromDay ??= day;
       fromDay = day;
     }
@@ -1072,7 +1074,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.warning.withOpacity(0.35), width: 1.2),
+        side: BorderSide(color: colors.warning.withValues(alpha: 0.35), width: 1.2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1085,7 +1087,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: colors.warning.withOpacity(0.12),
+                    color: colors.warning.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -1120,9 +1122,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: colors.info.withOpacity(0.12),
+                    color: colors.info.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: colors.info.withOpacity(0.25)),
+                    border: Border.all(color: colors.info.withValues(alpha: 0.25)),
                   ),
                   child: Text(
                     'Day $age',
@@ -1142,9 +1144,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
               decoration: BoxDecoration(
-                color: colors.warning.withOpacity(0.08),
+                color: colors.warning.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.warning.withOpacity(0.2)),
+                border: Border.all(color: colors.warning.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1233,9 +1235,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: colors.brand.withOpacity(0.06),
+                color: colors.brand.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colors.brand.withOpacity(0.18)),
+                border: Border.all(color: colors.brand.withValues(alpha: 0.18)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1319,9 +1321,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.brand.withOpacity(0.08),
+                  color: colors.brand.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colors.brand.withOpacity(0.2)),
+                  border: Border.all(color: colors.brand.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
@@ -1393,7 +1395,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: profitColor.withOpacity(0.35), width: 1.2),
+        side: BorderSide(color: profitColor.withValues(alpha: 0.35), width: 1.2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -1429,7 +1431,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: colors.muted.withOpacity(0.12),
+                    color: colors.muted.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -1450,9 +1452,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: profitColor.withOpacity(0.08),
+                color: profitColor.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: profitColor.withOpacity(0.2)),
+                border: Border.all(color: profitColor.withValues(alpha: 0.2)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1554,9 +1556,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1580,7 +1582,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 Icon(
                   Icons.arrow_forward_ios,
                   size: 9,
-                  color: color.withOpacity(0.7),
+                  color: color.withValues(alpha: 0.7),
                 ),
             ],
           ),
@@ -1669,7 +1671,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     child: Padding(
       padding: const EdgeInsets.all(12),
       child: DropdownButtonFormField<String>(
-        value: selectedId,
+        initialValue: selectedId,
         isExpanded: true,
         decoration: const InputDecoration(
           labelText: 'Select batch',
@@ -1726,7 +1728,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? colors.info.withOpacity(0.08)
+                    ? colors.info.withValues(alpha: 0.08)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -1735,7 +1737,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   CircleAvatar(
                     radius: 17,
                     backgroundColor: (closed ? colors.muted : colors.info)
-                        .withOpacity(.14),
+                        .withValues(alpha: .14),
                     child: Icon(
                       closed ? Icons.lock_outline : Icons.autorenew,
                       size: 17,
@@ -1797,7 +1799,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
       Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          color: color.withOpacity(.12),
+          color: color.withValues(alpha: .12),
           borderRadius: BorderRadius.circular(9),
         ),
         child: Icon(icon, size: 18, color: color),
@@ -1984,9 +1986,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 margin: const EdgeInsets.only(top: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.warning.withOpacity(0.06),
+                  color: colors.warning.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: colors.warning.withOpacity(0.2)),
+                  border: Border.all(color: colors.warning.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   children: [
@@ -2187,9 +2189,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                   margin: const EdgeInsets.only(top: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: colors.warning.withOpacity(0.06),
+                    color: colors.warning.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: colors.warning.withOpacity(0.2)),
+                    border: Border.all(color: colors.warning.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
@@ -2375,9 +2377,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
                 margin: const EdgeInsets.only(top: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.accent.withOpacity(0.06),
+                  color: colors.accent.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: colors.accent.withOpacity(0.2)),
+                  border: Border.all(color: colors.accent.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2469,7 +2471,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   Widget _miniTextMetric(String label, String value, Color color) => Container(
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: color.withOpacity(.06),
+      color: color.withValues(alpha: .06),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
@@ -2632,9 +2634,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   Widget _bigMetric(String label, String value, Color color) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: color.withOpacity(.08),
+      color: color.withValues(alpha: .08),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: color.withOpacity(.18)),
+      border: Border.all(color: color.withValues(alpha: .18)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2667,7 +2669,7 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
   Widget _miniMetric(String label, double value, Color color) => Container(
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: color.withOpacity(.06),
+      color: color.withValues(alpha: .06),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
@@ -2870,7 +2872,7 @@ class _TimeSeriesPainter extends CustomPainter {
     final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
 
     final gridPaint = Paint()
-      ..color = gridColor.withOpacity(.75)
+      ..color = gridColor.withValues(alpha: .75)
       ..strokeWidth = 1;
     for (var row = 0; row <= 3; row++) {
       final y = chart.top + chart.height * row / 3;
@@ -3010,8 +3012,8 @@ class _BarPainter extends CustomPainter {
         RRect.fromRectAndRadius(rect, const Radius.circular(6)),
         Paint()
           ..color = entry.value > 0
-              ? color.withOpacity(.75)
-              : muted.withOpacity(.25),
+              ? color.withValues(alpha: .75)
+              : muted.withValues(alpha: .25),
       );
       textPainter.text = TextSpan(
         text: entry.key,

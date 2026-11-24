@@ -540,7 +540,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: colors.accent.withOpacity(0.25),
+            color: colors.accent.withValues(alpha: 0.25),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -561,7 +561,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: colors.onAccent.withOpacity(0.2),
+                color: colors.onAccent.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(Icons.auto_awesome, color: colors.warning, size: 22),
@@ -585,7 +585,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
                         ? 'Analyzes first laying age, egg break-even & flock health'
                         : 'Analyzes weight standards, break-even price & profit margins',
                     style: TextStyle(
-                      color: colors.onAccent.withOpacity(0.85),
+                      color: colors.onAccent.withValues(alpha: 0.85),
                       fontSize: 11,
                     ),
                   ),
@@ -630,8 +630,7 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
               child: _buildMetricTile(
                 title: 'Live Birds',
                 value: '$_currentBirds / $_initialBirds',
-                sub: 'Mort: $_totalMortality (${mortPercent.toStringAsFixed(1)}%)' +
-                    (_birdsSold > 0 ? ' | Sold: $_birdsSold' : ''),
+                sub: 'Mort: $_totalMortality (${mortPercent.toStringAsFixed(1)}%)${_birdsSold > 0 ? ' | Sold: $_birdsSold' : ''}',
                 icon: Icons.pets,
                 color: colors.info,
               ),
@@ -707,9 +706,9 @@ class _AiAdvisorScreenState extends State<AiAdvisorScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -123,7 +123,7 @@ class _BentoKpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: iconColor.withOpacity(0.18)),
+        border: Border.all(color: iconColor.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,7 +134,7 @@ class _BentoKpiCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.14),
+                  color: iconColor.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 18, color: iconColor),
@@ -143,7 +143,7 @@ class _BentoKpiCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.12),
+                    color: iconColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -852,7 +852,7 @@ class _DateRangeBatchTable extends StatelessWidget {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: MaterialStatePropertyAll<Color?>(colors.successSoft),
+                  headingRowColor: WidgetStatePropertyAll<Color?>(colors.successSoft),
                   dataRowMinHeight: 38,
                   dataRowMaxHeight: 44,
                   columns: const [
@@ -930,7 +930,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 16, color: color),
@@ -949,9 +949,9 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Text(
         text,
@@ -1080,7 +1080,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedBatchId,
+                  initialValue: selectedBatchId,
                   decoration: InputDecoration(
                     labelText: 'Select Batch',
                     prefixIcon: const Icon(Icons.layers_outlined, size: 20),
@@ -1327,8 +1327,8 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: isSurplus
-                            ? colors.brand.withOpacity(0.15)
-                            : colors.warning.withOpacity(0.2),
+                            ? colors.brand.withValues(alpha: 0.15)
+                            : colors.warning.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -1440,7 +1440,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                     child: DataTable(
                       headingRowHeight: 40,
                       dataRowHeight: 46,
-                      headingRowColor: MaterialStatePropertyAll<Color?>(colors.infoSoft),
+                      headingRowColor: WidgetStatePropertyAll<Color?>(colors.infoSoft),
                       columns: const [
                         DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
                         DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -1458,7 +1458,7 @@ class _CloudBatchSummaryPageState extends State<CloudBatchSummaryPage> {
                           DataCell(Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: colors.info.withOpacity(0.08),
+                              color: colors.info.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(item.type, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),

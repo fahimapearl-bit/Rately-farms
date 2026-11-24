@@ -100,7 +100,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: c.brand,
           foregroundColor: c.onBrand,
-          disabledBackgroundColor: c.brand.withOpacity(0.55),
+          disabledBackgroundColor: c.brand.withValues(alpha: 0.55),
           disabledForegroundColor: c.onBrand,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -159,7 +159,7 @@ class AppTheme {
       progressIndicatorTheme: ProgressIndicatorThemeData(color: c.brand),
       textSelectionTheme: TextSelectionThemeData(
         cursorColor: c.brand,
-        selectionColor: c.brand.withOpacity(isDark ? 0.30 : 0.18),
+        selectionColor: c.brand.withValues(alpha: isDark ? 0.30 : 0.18),
         selectionHandleColor: c.brand,
       ),
       switchTheme: SwitchThemeData(
