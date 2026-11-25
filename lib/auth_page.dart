@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_config.dart';
-
 import 'app_colors.dart';
 import 'auth_widgets.dart';
 import 'password_strength.dart';
@@ -22,8 +21,6 @@ class AuthGate extends StatelessWidget {
         return ValueListenableBuilder<bool>(
           valueListenable: passwordRecoveryActive,
           builder: (context, recovering, _) {
-            // A PASSWORD_RECOVERY event puts the user in a temporary session;
-            // they must set a new password before reaching the app.
             if (recovering) return const ResetPasswordPage();
             if (session == null) return const AuthPage();
             return child;
@@ -33,6 +30,8 @@ class AuthGate extends StatelessWidget {
     );
   }
 }
+
+enum UserRole { owner, manager, worker }
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -48,12 +47,11 @@ class _AuthPageState extends State<AuthPage> {
   final nameController = TextEditingController();
   final mobileController = TextEditingController();
   final farmController = TextEditingController();
+  
   bool isLogin = true;
   bool busy = false;
   bool obscurePassword = true;
-
-  /// Inline error text shown inside the card (the snackbar is still fired,
-  /// this is the calmer, non-transient alternative).
+  UserRole selectedRole = UserRole.owner;
   String? _error;
 
   SupabaseClient get client => SupabaseConfig.client;
@@ -94,6 +92,7 @@ class _AuthPageState extends State<AuthPage> {
           password: passwordController.text,
         );
       } else {
+        // Role টি metadata-তে পাঠানো হচ্ছে
         final response = await client.auth.signUp(
           email: emailController.text.trim(),
           password: passwordController.text,
@@ -101,6 +100,7 @@ class _AuthPageState extends State<AuthPage> {
             'full_name': nameController.text.trim(),
             'mobile_number': mobileController.text.trim(),
             'farm_name': farmController.text.trim(),
+            'role': selectedRole.name, // এখানে role সেভ হচ্ছে
           },
         );
         if (!mounted) return;
@@ -136,15 +136,9 @@ class _AuthPageState extends State<AuthPage> {
     FocusScope.of(context).unfocus();
     await showDialog<void>(
       context: context,
-      builder: (_) => _ForgotPasswordDialog(
-        initialEmail: emailController.text.trim(),
-      ),
+      builder: (_) => _ForgotPasswordDialog(initialEmail: emailController.text.trim()),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -161,9 +155,7 @@ class _AuthPageState extends State<AuthPage> {
                 child: AuthCardShell(
                   header: AuthHeader(
                     title: 'Rately Farms',
-                    subtitle: isLogin
-                        ? 'Welcome back to your farm'
-                        : 'Create a new farm account',
+                    subtitle: isLogin ? 'Welcome back' : 'Create a new account',
                   ),
                   child: Form(
                     key: formKey,
@@ -172,42 +164,102 @@ class _AuthPageState extends State<AuthPage> {
                       children: [
                         _modeTabs(colors),
                         const SizedBox(height: 22),
+                        
+                        // Role Selection (শুধু সাইন-আপের সময়)
+                        if (!isLogin) ...[
+                          Text(
+                            'I am a:',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.muted),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: UserRole.values.map((role) {
+                              bool isSelected = selectedRole == role;
+                              return GestureDetector(
+                                onTap: () => setState(() => selectedRole = role),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 95,
+                                  height: 70,
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? colors.brand.withOpacity(0.1) : colors.surfaceAlt,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? colors.brand : colors.line,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        role == UserRole.owner 
+                                          ? Icons.account_balance 
+                                          : (role == UserRole.manager ? Icons.supervisor_account : Icons.groups),
+                                        size: 24,
+                                        color: isSelected ? colors.brand : colors.muted,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        role.name.toUpperCase(),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          color: isSelected ? colors.brand : colors.muted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // সাইন-আপ ফিল্ডস
                         if (!isLogin) ...[
                           AuthField(
                             controller: nameController,
-                            label: 'Full name',
-                            hint: 'e.g. Abdur Rahim',
+                            label: 'Full Name',
+                            hint: 'e.g. John Doe',
                             icon: Icons.person_outline_rounded,
                             enabled: !busy,
                             keyboardType: TextInputType.name,
-                            autofillHints: const [AutofillHints.name],
                             textInputAction: TextInputAction.next,
                             validator: (value) => requiredField(value, 'your full name'),
                           ),
                           const SizedBox(height: 12),
                           AuthField(
                             controller: mobileController,
-                            label: 'Mobile number',
-                            hint: '01XXXXXXXXX',
+                            label: 'Mobile Number',
+                            hint: '+8801XXXXXXXXX',
                             icon: Icons.phone_outlined,
                             enabled: !busy,
                             keyboardType: TextInputType.phone,
-                            autofillHints: const [AutofillHints.telephoneNumber],
                             textInputAction: TextInputAction.next,
                             validator: (value) => requiredField(value, 'your mobile number'),
                           ),
                           const SizedBox(height: 12),
-                          AuthField(
-                            controller: farmController,
-                            label: 'Farm name',
-                            hint: 'e.g. Rahim Poultry Farm',
-                            icon: Icons.home_work_outlined,
-                            enabled: !busy,
-                            textInputAction: TextInputAction.next,
-                            validator: (value) => requiredField(value, 'your farm name'),
-                          ),
-                          const SizedBox(height: 12),
+                          // শুধু Owner হলে Farm Name চাই
+                          if (selectedRole == UserRole.owner) ...[
+                            AuthField(
+                              controller: farmController,
+                              label: 'Farm Name',
+                              hint: 'e.g. Green Valley Farm',
+                              icon: Icons.home_work_outlined,
+                              enabled: !busy,
+                              textInputAction: TextInputAction.next,
+                              validator: (value) => requiredField(value, 'your farm name'),
+
+
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                         ],
+
+                        // Email & Password (উভয় মোডে)
                         AuthField(
                           controller: emailController,
                           label: 'Email',
@@ -215,15 +267,10 @@ class _AuthPageState extends State<AuthPage> {
                           icon: Icons.alternate_email_rounded,
                           enabled: !busy,
                           keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
                           textInputAction: TextInputAction.next,
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Enter your email';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Enter a valid email address';
-                            }
+                            if (value == null || value.trim().isEmpty) return 'Enter your email';
+                            if (!value.contains('@') || !value.contains('.')) return 'Enter a valid email address';
                             return null;
                           },
                         ),
@@ -242,10 +289,7 @@ class _AuthPageState extends State<AuthPage> {
                               ),
                               child: const Text(
                                 'Forgot password?',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -263,11 +307,7 @@ class _AuthPageState extends State<AuthPage> {
                           child: Text(
                             'Rately Farms · Poultry farm management',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 0.1,
-                              color: colors.hint,
-                            ),
+                            style: TextStyle(fontSize: 11, letterSpacing: 0.1, color: colors.hint),
                           ),
                         ),
                       ],
@@ -294,17 +334,11 @@ class _AuthPageState extends State<AuthPage> {
         children: [
           _tab(colors, 'Sign in', isLogin, () {
             if (busy) return;
-            setState(() {
-              isLogin = true;
-              _error = null;
-            });
+            setState(() { isLogin = true; _error = null; });
           }),
           _tab(colors, 'Register', !isLogin, () {
             if (busy) return;
-            setState(() {
-              isLogin = false;
-              _error = null;
-            });
+            setState(() { isLogin = false; _error = null; });
           }),
         ],
       ),
@@ -327,13 +361,7 @@ class _AuthPageState extends State<AuthPage> {
               color: selected ? colors.card : AppColors.transparent,
               borderRadius: BorderRadius.circular(11),
               boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: colors.shadow,
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ]
+                  ? [BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 2))]
                   : null,
             ),
             child: Text(
@@ -360,17 +388,13 @@ class _AuthPageState extends State<AuthPage> {
       enabled: !busy,
       obscureText: obscurePassword,
       keyboardType: TextInputType.visiblePassword,
-      autofillHints: [
-        isLogin ? AutofillHints.password : AutofillHints.newPassword,
-      ],
+      autofillHints: [isLogin ? AutofillHints.password : AutofillHints.newPassword],
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => busy ? null : submit(),
       suffixIcon: IconButton(
         tooltip: obscurePassword ? 'Show password' : 'Hide password',
         icon: Icon(
-          obscurePassword
-              ? Icons.visibility_outlined
-              : Icons.visibility_off_outlined,
+          obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
           size: 20,
           color: colors.muted,
         ),
@@ -378,11 +402,7 @@ class _AuthPageState extends State<AuthPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return 'Enter your password';
-        // Only new passwords are length-checked; existing accounts may still
-        // hold a shorter password from before the 8-character rule.
-        if (!isLogin && value.length < 8) {
-          return 'Password must be at least 8 characters';
-        }
+        if (!isLogin && value.length < 8) return 'Password must be at least 8 characters';
         return null;
       },
     );
@@ -400,12 +420,7 @@ class _AuthPageState extends State<AuthPage> {
             style: TextStyle(fontSize: 13, color: colors.muted),
           ),
           TextButton(
-            onPressed: busy
-                ? null
-                : () => setState(() {
-                      isLogin = !isLogin;
-                      _error = null;
-                    }),
+            onPressed: busy ? null : () => setState(() { isLogin = !isLogin; _error = null; }),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(0, 40),
@@ -422,11 +437,9 @@ class _AuthPageState extends State<AuthPage> {
   }
 }
 
-/// Email-entry dialog for the "Forgot password?" flow. It sends a Supabase
-/// recovery email whose link comes back to `ratelyfarms://reset-password`.
+/// Forgot password dialog
 class _ForgotPasswordDialog extends StatefulWidget {
   const _ForgotPasswordDialog({required this.initialEmail});
-
   final String initialEmail;
 
   @override
@@ -435,8 +448,7 @@ class _ForgotPasswordDialog extends StatefulWidget {
 
 class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   final formKey = GlobalKey<FormState>();
-  late final TextEditingController emailController =
-      TextEditingController(text: widget.initialEmail);
+  late final TextEditingController emailController = TextEditingController(text: widget.initialEmail);
   bool busy = false;
   bool sent = false;
   String? error;
@@ -450,10 +462,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   Future<void> _send() async {
     if (!formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    setState(() {
-      busy = true;
-      error = null;
-    });
+    setState(() { busy = true; error = null; });
     try {
       await SupabaseConfig.client.auth.resetPasswordForEmail(
         emailController.text.trim(),
@@ -464,7 +473,7 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
     } on AuthException catch (e) {
       if (mounted) setState(() => error = e.message);
     } catch (e) {
-      if (mounted) setState(() => error = 'Could not send the reset email: $e');
+      if (mounted) setState(() => error = 'Could not send reset email: $e');
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -481,50 +490,26 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
       title: Row(
         children: [
-          Icon(
-            sent ? Icons.mark_email_read_outlined : Icons.lock_reset_rounded,
-            size: 22,
-            color: colors.brand,
-          ),
+          Icon(sent ? Icons.mark_email_read_outlined : Icons.lock_reset_rounded, size: 22, color: colors.brand),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               sent ? 'Check your inbox' : 'Reset your password',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: colors.ink,
-              ),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: colors.ink),
             ),
           ),
         ],
       ),
-      content: SizedBox(
-        width: 340,
-        child: sent ? _sentBody() : _formBody(),
-      ),
+      content: SizedBox(width: 340, child: sent ? _sentBody() : _formBody()),
       actions: [
         if (sent)
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Done'),
-          )
+          FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done'))
         else ...[
-          TextButton(
-            onPressed: busy ? null : () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: busy ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
           FilledButton(
             onPressed: busy ? null : _send,
             child: busy
-                ? SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.onBrand,
-                    ),
-                  )
+                ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.onBrand))
                 : const Text('Send link'),
           ),
         ],
@@ -556,12 +541,8 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => busy ? null : _send(),
             validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Enter your email';
-              }
-              if (!value.contains('@') || !value.contains('.')) {
-                return 'Enter a valid email address';
-              }
+              if (value == null || value.trim().isEmpty) return 'Enter your email';
+              if (!value.contains('@') || !value.contains('.')) return 'Enter a valid email address';
               return null;
             },
           ),
@@ -580,23 +561,12 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'We sent a password reset link to',
-          style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted),
-        ),
+        Text('We sent a password reset link to', style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted)),
         const SizedBox(height: 4),
-        Text(
-          emailController.text.trim(),
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w700,
-            color: colors.ink,
-          ),
-        ),
+        Text(emailController.text.trim(), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: colors.ink)),
         const SizedBox(height: 12),
         Text(
-          'Open the link on this device to set a new password. The link expires '
-          'after a short time — check your spam folder if it does not arrive.',
+          'Open the link on this device to set a new password. The link expires after a short time — check your spam folder if it does not arrive.',
           style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted),
         ),
       ],
