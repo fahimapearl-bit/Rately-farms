@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'supabase_config.dart';
 import 'app_colors.dart';
@@ -47,12 +48,18 @@ class _AuthPageState extends State<AuthPage> {
   final nameController = TextEditingController();
   final mobileController = TextEditingController();
   final farmController = TextEditingController();
-  
+
   bool isLogin = true;
   bool busy = false;
   bool obscurePassword = true;
   UserRole selectedRole = UserRole.owner;
   String? _error;
+
+  // Location related
+  double? _latitude;
+  double? _longitude;
+  bool _locationLoading = false;
+  String? _locationStatus;
 
   SupabaseClient get client => SupabaseConfig.client;
 
@@ -78,6 +85,70 @@ class _AuthPageState extends State<AuthPage> {
     setState(() {});
   }
 
+  /// Location permission চেক করে current position নেয়
+  Future<bool> _getCurrentLocation() async {
+    setState(() {
+      _locationLoading = true;
+      _locationStatus = 'Getting location...';
+    });
+
+    try {
+      // 1. Location service চালু আছে কিনা চেক
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _locationStatus = 'Location services are disabled. Please turn on GPS.';
+          _locationLoading = false;
+        });
+        return false;
+      }
+
+      // 2. Permission চেক
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _locationStatus = 'Location permission denied.';
+            _locationLoading = false;
+          });
+          return false;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _locationStatus =
+              'Location permission permanently denied. Please enable from settings.';
+          _locationLoading = false;
+        });
+        return false;
+      }
+
+      // 3. Current position নেওয়া
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+
+      setState(() {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        _locationStatus =
+            'Location captured: ${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+        _locationLoading = false;
+      });
+
+      return true;
+    } catch (e) {
+      setState(() {
+        _locationStatus = 'Failed to get location: $e';
+        _locationLoading = false;
+      });
+      return false;
+    }
+  }
+
   Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
@@ -85,6 +156,7 @@ class _AuthPageState extends State<AuthPage> {
       busy = true;
       _error = null;
     });
+
     try {
       if (isLogin) {
         await client.auth.signInWithPassword(
@@ -92,7 +164,20 @@ class _AuthPageState extends State<AuthPage> {
           password: passwordController.text,
         );
       } else {
-        // Role টি metadata-তে পাঠানো হচ্ছে
+        // ========== SIGN UP ==========
+        // প্রথমে location নেওয়ার চেষ্টা
+        final hasLocation = await _getCurrentLocation();
+
+        // Location না পেলেও signup চালিয়ে যেতে পারবেন (optional করে রাখা হয়েছে)
+        // যদি বাধ্যতামূলক করতে চান, তাহলে নিচের if ব্লক আনকমেন্ট করুন:
+        /*
+        if (!hasLocation) {
+          _showError('Location is required for registration. Please enable GPS and try again.');
+          setState(() => busy = false);
+          return;
+        }
+        */
+
         final response = await client.auth.signUp(
           email: emailController.text.trim(),
           password: passwordController.text,
@@ -100,14 +185,19 @@ class _AuthPageState extends State<AuthPage> {
             'full_name': nameController.text.trim(),
             'mobile_number': mobileController.text.trim(),
             'farm_name': farmController.text.trim(),
-            'role': selectedRole.name, // এখানে role সেভ হচ্ছে
+            'role': selectedRole.name,
+            // Location data
+            if (_latitude != null) 'latitude': _latitude,
+            if (_longitude != null) 'longitude': _longitude,
           },
         );
+
         if (!mounted) return;
         final message = response.session == null
             ? 'Registration complete. Verify your email, then sign in.'
             : 'Registration successful.';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
         if (response.session == null) setState(() => isLogin = true);
       }
     } on AuthException catch (error) {
@@ -136,7 +226,8 @@ class _AuthPageState extends State<AuthPage> {
     FocusScope.of(context).unfocus();
     await showDialog<void>(
       context: context,
-      builder: (_) => _ForgotPasswordDialog(initialEmail: emailController.text.trim()),
+      builder: (_) =>
+          _ForgotPasswordDialog(initialEmail: emailController.text.trim()),
     );
   }
 
@@ -155,7 +246,8 @@ class _AuthPageState extends State<AuthPage> {
                 child: AuthCardShell(
                   header: AuthHeader(
                     title: 'Rately Farms',
-                    subtitle: isLogin ? 'Welcome back' : 'Create a new account',
+                    subtitle:
+                        isLogin ? 'Welcome back' : 'Create a new account',
                   ),
                   child: Form(
                     key: formKey,
@@ -164,12 +256,15 @@ class _AuthPageState extends State<AuthPage> {
                       children: [
                         _modeTabs(colors),
                         const SizedBox(height: 22),
-                        
+
                         // Role Selection (শুধু সাইন-আপের সময়)
                         if (!isLogin) ...[
                           Text(
                             'I am a:',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.muted),
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: colors.muted),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -177,16 +272,21 @@ class _AuthPageState extends State<AuthPage> {
                             children: UserRole.values.map((role) {
                               bool isSelected = selectedRole == role;
                               return GestureDetector(
-                                onTap: () => setState(() => selectedRole = role),
+                                onTap: () =>
+                                    setState(() => selectedRole = role),
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
                                   width: 95,
                                   height: 70,
                                   decoration: BoxDecoration(
-                                    color: isSelected ? colors.brand.withOpacity(0.1) : colors.surfaceAlt,
+                                    color: isSelected
+                                        ? colors.brand.withOpacity(0.1)
+                                        : colors.surfaceAlt,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: isSelected ? colors.brand : colors.line,
+                                      color: isSelected
+                                          ? colors.brand
+                                          : colors.line,
                                       width: 2,
                                     ),
                                   ),
@@ -194,19 +294,27 @@ class _AuthPageState extends State<AuthPage> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        role == UserRole.owner 
-                                          ? Icons.account_balance 
-                                          : (role == UserRole.manager ? Icons.supervisor_account : Icons.groups),
+                                        role == UserRole.owner
+                                            ? Icons.account_balance
+                                            : (role == UserRole.manager
+                                                ? Icons.supervisor_account
+                                                : Icons.groups),
                                         size: 24,
-                                        color: isSelected ? colors.brand : colors.muted,
+                                        color: isSelected
+                                            ? colors.brand
+                                            : colors.muted,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         role.name.toUpperCase(),
                                         style: TextStyle(
                                           fontSize: 10,
-                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                          color: isSelected ? colors.brand : colors.muted,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: isSelected
+                                              ? colors.brand
+                                              : colors.muted,
                                         ),
                                       ),
                                     ],
@@ -228,7 +336,8 @@ class _AuthPageState extends State<AuthPage> {
                             enabled: !busy,
                             keyboardType: TextInputType.name,
                             textInputAction: TextInputAction.next,
-                            validator: (value) => requiredField(value, 'your full name'),
+                            validator: (value) =>
+                                requiredField(value, 'your full name'),
                           ),
                           const SizedBox(height: 12),
                           AuthField(
@@ -239,7 +348,8 @@ class _AuthPageState extends State<AuthPage> {
                             enabled: !busy,
                             keyboardType: TextInputType.phone,
                             textInputAction: TextInputAction.next,
-                            validator: (value) => requiredField(value, 'your mobile number'),
+                            validator: (value) =>
+                                requiredField(value, 'your mobile number'),
                           ),
                           const SizedBox(height: 12),
                           // শুধু Owner হলে Farm Name চাই
@@ -251,12 +361,75 @@ class _AuthPageState extends State<AuthPage> {
                               icon: Icons.home_work_outlined,
                               enabled: !busy,
                               textInputAction: TextInputAction.next,
-                              validator: (value) => requiredField(value, 'your farm name'),
-
-
+                              validator: (value) =>
+                                  requiredField(value, 'your farm name'),
                             ),
                             const SizedBox(height: 12),
                           ],
+
+                          // ========== Location Status UI ==========
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: colors.surfaceAlt,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: colors.line),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _latitude != null
+                                      ? Icons.location_on
+                                      : Icons.location_off,
+                                  color: _latitude != null
+                                      ? colors.brand
+                                      : colors.muted,
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Farm Location',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: colors.ink,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _locationLoading
+                                            ? 'Getting location...'
+                                            : (_locationStatus ??
+                                                'Location will be captured on signup'),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: colors.muted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_locationLoading)
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                else
+                                  TextButton(
+                                    onPressed: busy ? null : _getCurrentLocation,
+                                    child: const Text('Get'),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                         ],
 
                         // Email & Password (উভয় মোডে)
@@ -269,27 +442,34 @@ class _AuthPageState extends State<AuthPage> {
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) return 'Enter your email';
-                            if (!value.contains('@') || !value.contains('.')) return 'Enter a valid email address';
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Enter your email';
+                            }
+                            if (!value.contains('@') || !value.contains('.')) {
+                              return 'Enter a valid email address';
+                            }
                             return null;
                           },
                         ),
                         const SizedBox(height: 12),
                         _passwordField(colors),
-                        if (!isLogin) PasswordStrengthMeter(value: passwordController.text),
+                        if (!isLogin)
+                          PasswordStrengthMeter(value: passwordController.text),
                         if (isLogin)
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
                               onPressed: busy ? null : _openForgotPassword,
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 6),
                                 minimumSize: const Size(0, 40),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: const Text(
                                 'Forgot password?',
-                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                    fontSize: 12.5, fontWeight: FontWeight.w600),
                               ),
                             ),
                           ),
@@ -307,7 +487,10 @@ class _AuthPageState extends State<AuthPage> {
                           child: Text(
                             'Rately Farms · Poultry farm management',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 11, letterSpacing: 0.1, color: colors.hint),
+                            style: TextStyle(
+                                fontSize: 11,
+                                letterSpacing: 0.1,
+                                color: colors.hint),
                           ),
                         ),
                       ],
@@ -334,18 +517,25 @@ class _AuthPageState extends State<AuthPage> {
         children: [
           _tab(colors, 'Sign in', isLogin, () {
             if (busy) return;
-            setState(() { isLogin = true; _error = null; });
+            setState(() {
+              isLogin = true;
+              _error = null;
+            });
           }),
           _tab(colors, 'Register', !isLogin, () {
             if (busy) return;
-            setState(() { isLogin = false; _error = null; });
+            setState(() {
+              isLogin = false;
+              _error = null;
+            });
           }),
         ],
       ),
     );
   }
 
-  Widget _tab(AppColors colors, String label, bool selected, VoidCallback onTap) {
+  Widget _tab(
+      AppColors colors, String label, bool selected, VoidCallback onTap) {
     return Expanded(
       child: Semantics(
         selected: selected,
@@ -361,7 +551,12 @@ class _AuthPageState extends State<AuthPage> {
               color: selected ? colors.card : AppColors.transparent,
               borderRadius: BorderRadius.circular(11),
               boxShadow: selected
-                  ? [BoxShadow(color: colors.shadow, blurRadius: 8, offset: const Offset(0, 2))]
+                  ? [
+                      BoxShadow(
+                          color: colors.shadow,
+                          blurRadius: 8,
+                          offset: const Offset(0, 2))
+                    ]
                   : null,
             ),
             child: Text(
@@ -388,13 +583,17 @@ class _AuthPageState extends State<AuthPage> {
       enabled: !busy,
       obscureText: obscurePassword,
       keyboardType: TextInputType.visiblePassword,
-      autofillHints: [isLogin ? AutofillHints.password : AutofillHints.newPassword],
+      autofillHints: [
+        isLogin ? AutofillHints.password : AutofillHints.newPassword
+      ],
       textInputAction: TextInputAction.done,
       onSubmitted: (_) => busy ? null : submit(),
       suffixIcon: IconButton(
         tooltip: obscurePassword ? 'Show password' : 'Hide password',
         icon: Icon(
-          obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+          obscurePassword
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined,
           size: 20,
           color: colors.muted,
         ),
@@ -402,7 +601,9 @@ class _AuthPageState extends State<AuthPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return 'Enter your password';
-        if (!isLogin && value.length < 8) return 'Password must be at least 8 characters';
+        if (!isLogin && value.length < 8) {
+          return 'Password must be at least 8 characters';
+        }
         return null;
       },
     );
@@ -420,7 +621,12 @@ class _AuthPageState extends State<AuthPage> {
             style: TextStyle(fontSize: 13, color: colors.muted),
           ),
           TextButton(
-            onPressed: busy ? null : () => setState(() { isLogin = !isLogin; _error = null; }),
+            onPressed: busy
+                ? null
+                : () => setState(() {
+                      isLogin = !isLogin;
+                      _error = null;
+                    }),
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(0, 40),
@@ -428,7 +634,8 @@ class _AuthPageState extends State<AuthPage> {
             ),
             child: Text(
               isLogin ? 'Create one' : 'Sign in',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -448,7 +655,8 @@ class _ForgotPasswordDialog extends StatefulWidget {
 
 class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   final formKey = GlobalKey<FormState>();
-  late final TextEditingController emailController = TextEditingController(text: widget.initialEmail);
+  late final TextEditingController emailController =
+      TextEditingController(text: widget.initialEmail);
   bool busy = false;
   bool sent = false;
   String? error;
@@ -462,7 +670,10 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
   Future<void> _send() async {
     if (!formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    setState(() { busy = true; error = null; });
+    setState(() {
+      busy = true;
+      error = null;
+    });
     try {
       await SupabaseConfig.client.auth.resetPasswordForEmail(
         emailController.text.trim(),
@@ -490,12 +701,14 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
       title: Row(
         children: [
-          Icon(sent ? Icons.mark_email_read_outlined : Icons.lock_reset_rounded, size: 22, color: colors.brand),
+          Icon(sent ? Icons.mark_email_read_outlined : Icons.lock_reset_rounded,
+              size: 22, color: colors.brand),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               sent ? 'Check your inbox' : 'Reset your password',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: colors.ink),
+              style: TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w800, color: colors.ink),
             ),
           ),
         ],
@@ -503,13 +716,21 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       content: SizedBox(width: 340, child: sent ? _sentBody() : _formBody()),
       actions: [
         if (sent)
-          FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done'))
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'))
         else ...[
-          TextButton(onPressed: busy ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+              onPressed: busy ? null : () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: busy ? null : _send,
             child: busy
-                ? SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2, color: colors.onBrand))
+                ? SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: colors.onBrand))
                 : const Text('Send link'),
           ),
         ],
@@ -541,8 +762,12 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => busy ? null : _send(),
             validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Enter your email';
-              if (!value.contains('@') || !value.contains('.')) return 'Enter a valid email address';
+              if (value == null || value.trim().isEmpty) {
+                return 'Enter your email';
+              }
+              if (!value.contains('@') || !value.contains('.')) {
+                return 'Enter a valid email address';
+              }
               return null;
             },
           ),
@@ -561,9 +786,13 @@ class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('We sent a password reset link to', style: TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted)),
+        Text('We sent a password reset link to',
+            style:
+                TextStyle(fontSize: 12.5, height: 1.45, color: colors.muted)),
         const SizedBox(height: 4),
-        Text(emailController.text.trim(), style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: colors.ink)),
+        Text(emailController.text.trim(),
+            style: TextStyle(
+                fontSize: 13.5, fontWeight: FontWeight.w700, color: colors.ink)),
         const SizedBox(height: 12),
         Text(
           'Open the link on this device to set a new password. The link expires after a short time — check your spam folder if it does not arrive.',
