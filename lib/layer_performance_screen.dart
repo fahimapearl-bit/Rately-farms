@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 import 'app_colors.dart';
+import 'batch_sharing.dart';
 
 class LayerPerformanceScreen extends StatefulWidget {
   final String? initialBatchId;
@@ -40,13 +41,10 @@ class _LayerPerformanceScreenState extends State<LayerPerformanceScreen> {
         return;
       }
 
-      final data = await _supabase
-          .from('batches')
-          .select('id, name, start_date, production_type, production_category, breed, status, initial_birds, additional_birds')
-          .eq('user_id', user.id)
-          .order('start_date', ascending: false);
+      // Owned + assigned batches (RLS scopes the rows).
+      final access = await loadAccessibleBatches(_supabase);
 
-      final List<Map<String, dynamic>> list = List<Map<String, dynamic>>.from(data);
+      final List<Map<String, dynamic>> list = access.batches;
       if (mounted) {
         setState(() {
           _batches = list;

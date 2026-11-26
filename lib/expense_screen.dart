@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'add_batch_screen.dart';
 import 'app_colors.dart';
+import 'batch_sharing.dart';
 import 'average_weight_screen.dart';
 import 'daily_record_screen.dart';
 import 'feed_charts.dart';
@@ -107,12 +108,9 @@ class _ExpenseScreenNewState extends State<ExpenseScreenNew> {
     try {
       final user = _client.auth.currentUser;
       if (user == null) throw Exception('User not logged in');
+      final access = await loadAccessibleBatches(_client);
       final results = await Future.wait([
-        _client
-            .from('batches')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('start_date', ascending: false),
+        Future.value(access.batches),
         _client
             .from('daily_records')
             .select('*')

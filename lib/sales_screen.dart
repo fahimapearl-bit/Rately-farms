@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_colors.dart';
+import 'batch_sharing.dart';
 
 class SalesScreenNew extends StatefulWidget {
   const SalesScreenNew({super.key});
@@ -273,14 +274,9 @@ class _SalesScreenNewState extends State<SalesScreenNew> {
       return;
     }
     try {
-      final rows = await client
-          .from('batches')
-          .select(
-            'id, name, production_type, production_category, breed, '
-            'initial_birds, status, egg_purpose',
-          )
-          .eq('user_id', user.id)
-          .order('start_date', ascending: false);
+      // Owned + assigned batches (RLS scopes the rows).
+      final access = await loadAccessibleBatches(client);
+      final rows = access.batches;
 
       batches = List<Map<String, dynamic>>.from(rows)
           .where((b) => (b['status'] ?? 'Active') == 'Active')

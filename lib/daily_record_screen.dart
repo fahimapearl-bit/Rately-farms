@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_colors.dart';
 import 'average_weight_screen.dart';
+import 'batch_sharing.dart';
 import 'feed_charts.dart';
 import 'layer_performance_screen.dart';
 import 'market_price_screen.dart';
@@ -85,6 +86,8 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
   String? _schemaWarning;
 
   List<Map<String, dynamic>> _batches = [];
+  // batchId -> 'owner' | 'edit' | 'expenses' | 'sales' | 'view'
+  Map<String, String> _permissions = {};
   Map<String, dynamic>? _selectedBatch;
 
   DateTime _selectedDate = DateTime.now();
@@ -381,15 +384,11 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
 
       await _probeSchema();
 
-      final data = await _supabase
-          .from('batches')
-          .select(
-            'id, name, start_date, status, production_type, production_category, breed, initial_birds, additional_birds, start_age_days, opening_feed_kg, opening_cost',
-          )
-          .eq('user_id', user.id)
-          .order('start_date', ascending: false);
+      // Owned + assigned batches (RLS scopes the rows).
+      final access = await loadAccessibleBatches(_supabase);
 
-      final list = List<Map<String, dynamic>>.from(data);
+      final list = access.batches;
+      _permissions = access.permissions;
 
       if (!mounted) return;
       setState(() {
@@ -446,7 +445,6 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
           .select('*')
           .eq('batch_id', batchId)
           .order('record_date', ascending: false);
-
       double exp = 0;
       try {
         final expenses = await _supabase
@@ -775,9 +773,20 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
     return payload;
   }
 
+  /// Permission of the currently selected batch.
+  String get _currentPerm =>
+      _selectedBatch == null
+          ? 'view'
+          : (_permissions[_selectedBatch!['id'].toString()] ?? 'view');
+
   Future<void> _save() async {
     if (_selectedBatch == null) {
       _snack('Select a batch first', isError: true);
+      return;
+    }
+    // RLS also enforces this; the check just gives a friendlier message.
+    if (!['owner', 'edit'].contains(_currentPerm)) {
+      _snack('You have view-only access to this batch', isError: true);
       return;
     }
     if (sessionTotal <= 0 && eggsTotal == 0 && _parseInt(_mortalityCtrl) == 0) {
@@ -2361,7 +2370,9 @@ class _DailyRecordPageNewState extends State<DailyRecordPageNew> {
                           size: 17,
                           color: colors.error,
                         ),
-                        onPressed: () => _deleteRecord(r),
+                        onPressed: _currentPerm == 'owner'
+                            ? () => _deleteRecord(r)
+                            : null,
                       ),
                     ],
                   ),

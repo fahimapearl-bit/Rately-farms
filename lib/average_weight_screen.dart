@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'poultry_standards.dart';
 
 import 'app_colors.dart';
+import 'batch_sharing.dart';
 
 class AverageWeightScreen extends StatefulWidget {
   /// Opens directly on this batch (passed from the Daily Records screen).
@@ -62,17 +63,10 @@ class _AverageWeightScreenState extends State<AverageWeightScreen> {
         return;
       }
 
-      final data = await _supabase
-          .from('batches')
-          .select(
-            'id, name, start_date, production_type, production_category, breed, status',
-          )
-          .eq('user_id', user.id)
-          .order('start_date', ascending: false);
+      // Owned + assigned batches (RLS scopes the rows).
+      final access = await loadAccessibleBatches(_supabase);
 
-      final List<Map<String, dynamic>> list = List<Map<String, dynamic>>.from(
-        data,
-      );
+      final List<Map<String, dynamic>> list = access.batches;
       if (mounted) {
         setState(() {
           _batches = list;

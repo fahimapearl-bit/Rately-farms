@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_colors.dart';
+import 'batch_sharing.dart';
+import 'batch_share_screen.dart';
 
 class AddBirdsResult {
   final int quantity;
@@ -20,6 +22,8 @@ class BatchListScreenNew extends StatefulWidget {
 class _BatchListScreenNewState extends State<BatchListScreenNew> {
   final client = Supabase.instance.client;
   List<Map<String, dynamic>> batches = [];
+  // batchId -> 'owner' | 'edit' | 'expenses' | 'sales' | 'view'
+  Map<String, String> permissions = {};
   bool loading = true;
   String selectedFilter = 'All'; // 'All', 'Active', 'Closed'
 
@@ -35,15 +39,13 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
       final user = client.auth.currentUser;
       if (user == null) throw Exception('User not logged in');
 
-      final data = await client
-          .from('batches')
-          .select()
-          .eq('user_id', user.id)
-          .order('start_date', ascending: false);
+      // Owned batches + batches assigned to this account (RLS-scoped).
+      final access = await loadAccessibleBatches(client);
 
       if (!mounted) return;
       setState(() {
-        batches = List<Map<String, dynamic>>.from(data);
+        batches = access.batches;
+        permissions = access.permissions;
       });
     } catch (e) {
       if (mounted) {
@@ -393,6 +395,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                         itemBuilder: (context, index) {
                           final batch = filteredBatches[index];
                           final isActive = (batch['status'] ?? 'Active') == 'Active';
+                          final isOwner = permissions[batch['id'].toString()] == 'owner';
 
                           return Card(
                             elevation: 1.5,
@@ -425,29 +428,54 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
-                                      if (isActive) ...[
+                                      if (isOwner) ...[
+                                        OutlinedButton.icon(
+                                          icon: Icon(Icons.group_add, size: 16, color: colors.brand),
+                                          label: Text('Assign', style: TextStyle(color: colors.brand)),
+                                          onPressed: () async {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => BatchShareScreen(
+                                                  batchId: batch['id'].toString(),
+                                                  batchName: (batch['name'] ?? 'Batch').toString(),
+                                                ),
+                                              ),
+                                            );
+                                            loadBatches();
+                                          },
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (isActive && isOwner) ...[
                                         OutlinedButton.icon(
                                           icon: Icon(Icons.add_circle_outline, size: 16, color: colors.brand),
                                           label: Text('Add Birds', style: TextStyle(color: colors.brand)),
                                           onPressed: () => showAddBirdsDialog(batch),
                                         ),
                                         const SizedBox(width: 8),
-                                        OutlinedButton.icon(
-                                          icon: Icon(Icons.check_box_outlined, size: 16, color: colors.warning),
-                                          label: Text('Close Batch', style: TextStyle(color: colors.warning)),
-                                          onPressed: () => confirmCloseBatch(batch),
+                                      ],
+                                      // Close / re-open / delete: OWNER ONLY.
+                                      // RLS enforces this even if the button shows.
+                                      if (isOwner) ...[
+                                        if (isActive)
+                                          OutlinedButton.icon(
+                                            icon: Icon(Icons.check_box_outlined, size: 16, color: colors.warning),
+                                            label: Text('Close Batch', style: TextStyle(color: colors.warning)),
+                                            onPressed: () => confirmCloseBatch(batch),
+                                          )
+                                        else
+                                          OutlinedButton.icon(
+                                            icon: Icon(Icons.replay, size: 16, color: colors.brand),
+                                            label: Text('Re-open', style: TextStyle(color: colors.brand)),
+                                            onPressed: () => updateBatchStatus(batch['id'].toString(), 'Active'),
+                                          ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          icon: Icon(Icons.delete_outline, color: colors.error),
+                                          onPressed: () => deleteBatch(batch),
                                         ),
-                                      ] else
-                                        OutlinedButton.icon(
-                                          icon: Icon(Icons.replay, size: 16, color: colors.brand),
-                                          label: Text('Re-open', style: TextStyle(color: colors.brand)),
-                                          onPressed: () => updateBatchStatus(batch['id'].toString(), 'Active'),
-                                        ),
-                                      const SizedBox(width: 8),
-                                      IconButton(
-                                        icon: Icon(Icons.delete_outline, color: colors.error),
-                                        onPressed: () => deleteBatch(batch),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ],
