@@ -135,10 +135,17 @@ class BatchSharingService {
 
   /// Looks up an account by email using the security-definer RPC.
   /// Never touches auth.users directly from the client.
-  Future<Map<String, dynamic>?> lookupByEmail(String email) async {
+  Future<Map<String, dynamic>?> lookupByEmail({
+    required String batchId,
+    required String email,
+  }) async {
+    final normalizedEmail = email.trim().toLowerCase();
     final rows = await _client.rpc(
       'lookup_batch_collaborator',
-      params: {'p_email': email.trim()},
+      params: {
+        'p_batch_id': batchId,
+        'p_email': normalizedEmail,
+      },
     );
     final list = (rows as List)
         .map((r) => Map<String, dynamic>.from(r as Map))

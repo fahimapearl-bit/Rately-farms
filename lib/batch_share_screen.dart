@@ -80,7 +80,10 @@ class _BatchShareScreenState extends State<BatchShareScreen> {
       return;
     }
     try {
-      final account = await service.lookupByEmail(email);
+      final account = await service.lookupByEmail(
+        batchId: widget.batchId,
+        email: email,
+      );
       if (!mounted) return;
       if (account == null) {
         _snack('No account found for $email', error: true);
