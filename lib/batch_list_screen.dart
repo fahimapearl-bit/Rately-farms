@@ -87,8 +87,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
         'source': result.source,
       });
 
-      // batches.additional_birds is re-synced by the DB trigger
-      // sync_batch_additional_birds().
+      // batches.additional_birds is re-synced by the DB trigger sync_batch_additional_birds().
       await loadBatches();
 
       if (mounted) {
@@ -146,7 +145,7 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
               TextFormField(
                 controller: qtyCtrl,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Number of birds *',
                   hintText: '100',
                 ),
@@ -406,7 +405,6 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Expanded(
                                         child: Text(
@@ -415,6 +413,55 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                         ),
                                       ),
                                       _buildStatusChip(batch),
+                                      if (isOwner) ...[
+                                        const SizedBox(width: 4),
+                                        PopupMenuButton<String>(
+                                          icon: Icon(Icons.more_vert, color: colors.muted),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          tooltip: 'Batch options',
+                                          onSelected: (val) {
+                                            if (val == 'close') confirmCloseBatch(batch);
+                                            if (val == 'reopen') updateBatchStatus(batch['id'].toString(), 'Active');
+                                            if (val == 'delete') deleteBatch(batch);
+                                          },
+                                          itemBuilder: (context) => [
+                                            if (isActive)
+                                              PopupMenuItem(
+                                                value: 'close',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.check_box_outlined, size: 20, color: colors.warning),
+                                                    const SizedBox(width: 10),
+                                                    const Text('Close Batch'),
+                                                  ],
+                                                ),
+                                              )
+                                            else
+                                              PopupMenuItem(
+                                                value: 'reopen',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.replay, size: 20, color: colors.brand),
+                                                    const SizedBox(width: 10),
+                                                    const Text('Re-open Batch'),
+                                                  ],
+                                                ),
+                                              ),
+                                            const PopupMenuDivider(),
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete_outline, size: 20, color: colors.error),
+                                                  const SizedBox(width: 10),
+                                                  Text('Delete Batch', style: TextStyle(color: colors.error)),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 8),
@@ -424,14 +471,17 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                   Text('Started: ${batch['start_date'] ?? '-'}'),
                                   if (!isActive && batch['closed_date'] != null)
                                     Text('Closed: ${batch['closed_date']}', style: TextStyle(color: colors.muted)),
-                                  const Divider(height: 16),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      if (isOwner) ...[
+                                  if (isOwner) ...[
+                                    const Divider(height: 20),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
                                         OutlinedButton.icon(
                                           icon: Icon(Icons.group_add, size: 16, color: colors.brand),
                                           label: Text('Assign', style: TextStyle(color: colors.brand)),
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(color: colors.brand),
+                                          ),
                                           onPressed: () async {
                                             await Navigator.push(
                                               context,
@@ -445,39 +495,21 @@ class _BatchListScreenNewState extends State<BatchListScreenNew> {
                                             loadBatches();
                                           },
                                         ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      if (isActive && isOwner) ...[
-                                        OutlinedButton.icon(
-                                          icon: Icon(Icons.add_circle_outline, size: 16, color: colors.brand),
-                                          label: Text('Add Birds', style: TextStyle(color: colors.brand)),
-                                          onPressed: () => showAddBirdsDialog(batch),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      // Close / re-open / delete: OWNER ONLY.
-                                      // RLS enforces this even if the button shows.
-                                      if (isOwner) ...[
-                                        if (isActive)
-                                          OutlinedButton.icon(
-                                            icon: Icon(Icons.check_box_outlined, size: 16, color: colors.warning),
-                                            label: Text('Close Batch', style: TextStyle(color: colors.warning)),
-                                            onPressed: () => confirmCloseBatch(batch),
-                                          )
-                                        else
-                                          OutlinedButton.icon(
-                                            icon: Icon(Icons.replay, size: 16, color: colors.brand),
-                                            label: Text('Re-open', style: TextStyle(color: colors.brand)),
-                                            onPressed: () => updateBatchStatus(batch['id'].toString(), 'Active'),
+                                        if (isActive) ...[
+                                          const SizedBox(width: 10),
+                                          FilledButton.icon(
+                                            icon: const Icon(Icons.add_circle_outline, size: 16),
+                                            label: const Text('Add Birds'),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: colors.brand,
+                                              foregroundColor: colors.onBrand,
+                                            ),
+                                            onPressed: () => showAddBirdsDialog(batch),
                                           ),
-                                        const SizedBox(width: 8),
-                                        IconButton(
-                                          icon: Icon(Icons.delete_outline, color: colors.error),
-                                          onPressed: () => deleteBatch(batch),
-                                        ),
+                                        ],
                                       ],
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
